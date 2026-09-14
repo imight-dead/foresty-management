@@ -1,0 +1,1792 @@
+<title>Foresty Lab Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#050505; --bg2:#0A0A0A;
+  --surface:#121212; --surface2:#161616;
+  --line:#242424;
+  --red:#E4181A; --red-dim:#D91E24; --maroon:#4A0000; --maroon-2:#2B0000;
+  --fg:#FFFFFF; --muted:#B3B3B3; --dim:#8A8A8A;
+  --ok:#3FBF6F; --warn:#FFB020;
+  --edge:rgba(228,24,26,.4);
+  --glow:0 0 12px rgba(228,24,26,.5);
+  --disp:"Chakra Petch","Arial Narrow",system-ui,sans-serif;
+  --mono:"JetBrains Mono","Consolas","Courier New",monospace;
+  --cut-btn:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+  --cut-tag:polygon(7px 0,100% 0,calc(100% - 7px) 100%,0 100%);
+  --sidebar:246px;
+}
+*{box-sizing:border-box;border-radius:0}
+[hidden]{display:none!important}
+img,svg{max-width:100%}
+html{color-scheme:dark}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:var(--mono);font-size:13.5px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;margin:0;text-wrap:balance;font-weight:700}
+h1{font-size:clamp(22px,3.4vw,34px);line-height:1.1}
+h2{font-size:17px;letter-spacing:.14em}
+h3{font-size:15px;letter-spacing:.1em}
+h4{font-size:12.5px;letter-spacing:.12em}
+a{color:var(--red);text-decoration:none}
+button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font-family:inherit;font-size:inherit}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+::selection{background:var(--red);color:#fff}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:#0c0c0c}
+::-webkit-scrollbar-thumb{background:#3a0d0d;border:1px solid #000}
+::-webkit-scrollbar-thumb:hover{background:var(--maroon)}
+
+/* ---------- shell ---------- */
+#shell{display:flex;min-height:100vh;background:
+  radial-gradient(1100px 620px at 100% 0%, #3A0000 0%, rgba(58,0,0,0) 62%),
+  radial-gradient(900px 700px at 0% 100%, #1e0000 0%, rgba(30,0,0,0) 60%),
+  var(--bg);}
+#sidebar{
+  width:var(--sidebar);flex:0 0 var(--sidebar);position:sticky;top:0;height:100vh;
+  background:linear-gradient(180deg,#0b0505 0%,#050505 60%);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:40;
+}
+.brand{padding:18px 16px 14px;border-bottom:1px solid var(--line);display:flex;gap:11px;align-items:center}
+.brand img{width:34px;height:auto;flex:0 0 34px;display:block}
+#shell.rail .brand img{width:30px}
+.brand .bt{font-family:var(--disp);font-weight:700;letter-spacing:.13em;font-size:14px;line-height:1.15}
+.brand .bs{font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase}
+.labshow{
+  display:inline-block;margin:14px 16px 4px;padding:3px 13px 3px 10px;background:var(--red);
+  color:#fff;font-family:var(--disp);font-weight:700;font-size:10px;letter-spacing:.2em;
+  clip-path:var(--cut-tag);
+}
+nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
+.nav-item{
+  display:flex;align-items:center;gap:11px;padding:10px 16px;color:var(--muted);
+  font-size:12px;letter-spacing:.09em;text-transform:uppercase;position:relative;
+  border-left:2px solid transparent;transition:.14s;width:100%;text-align:left;
+}
+.nav-item .ic{width:16px;height:16px;flex:0 0 16px;stroke:currentColor;fill:none;stroke-width:1.6}
+.nav-item:hover{color:#fff;background:rgba(228,24,26,.07)}
+.nav-item.active{color:#fff;background:linear-gradient(90deg,rgba(228,24,26,.22),rgba(228,24,26,0));border-left-color:var(--red)}
+.nav-item .cnt{margin-left:auto;background:var(--red);color:#fff;font-size:10px;padding:0 6px;font-weight:700;clip-path:var(--cut-tag)}
+.railtoggle{display:flex;align-items:center;gap:11px;padding:9px 16px;color:var(--dim);
+  border-top:1px solid var(--line);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  font-family:var(--disp);font-weight:600;transition:.14s}
+.railtoggle:hover{color:#fff;background:rgba(228,24,26,.08)}
+.railtoggle svg{width:15px;height:15px;flex:0 0 15px;stroke:currentColor;fill:none;stroke-width:2;transition:transform .18s ease}
+
+/* mode rail: hanya ikon */
+#shell.rail{--sidebar:62px}
+#shell.rail .brand{padding:18px 0;justify-content:center;gap:0}
+#shell.rail .btxt{display:none}
+#shell.rail .labshow{display:none}
+#shell.rail nav{border-top:1px solid var(--line);margin-top:0}
+#shell.rail nav{padding:10px 0}
+#shell.rail .nav-item{justify-content:center;padding:12px 0;gap:0;border-left-width:0;border-right:2px solid transparent}
+#shell.rail .nav-item.active{border-right-color:var(--red);background:rgba(228,24,26,.16)}
+#shell.rail .ntxt{display:none}
+#shell.rail .nav-item .cnt{position:absolute;top:5px;right:7px;margin:0;padding:0 4px;font-size:9px}
+#shell.rail .railtoggle{justify-content:center;padding:10px 0;gap:0}
+#shell.rail .railtoggle svg{transform:rotate(180deg)}
+#shell.rail .sidefoot{display:none}
+.sidefoot{padding:12px 16px;border-top:1px solid var(--line);font-size:10px;color:var(--dim);letter-spacing:.06em}
+.sidefoot b{color:var(--red);font-weight:700}
+
+#main{flex:1;min-width:0;display:flex;flex-direction:column}
+#topbar{
+  position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
+  padding:11px 22px;border-bottom:1px solid var(--line);background:rgba(5,5,5,.92);backdrop-filter:blur(8px);
+}
+.hamb{display:none;padding:6px;color:var(--muted)}
+.search{flex:1;max-width:460px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0d0d0d;padding:7px 11px;transition:.15s;position:relative}
+.search:focus-within{border-color:var(--edge);box-shadow:var(--glow)}
+.search .pr{color:var(--red);font-weight:700}
+.search input{flex:1;background:none;border:0;color:#fff;outline:none;font-size:12.5px;min-width:0}
+.search input::placeholder{color:#5c5c5c}
+.results{position:absolute;top:calc(100% + 6px);left:-1px;right:-1px;background:#0d0d0d;border:1px solid var(--edge);
+  box-shadow:var(--glow);max-height:330px;overflow-y:auto;z-index:50}
+.results button{display:block;width:100%;text-align:left;padding:9px 12px;border-bottom:1px solid #1c1c1c;font-size:12px}
+.results button:hover{background:rgba(228,24,26,.12)}
+.results .k{font-size:9px;letter-spacing:.2em;color:var(--red);text-transform:uppercase;font-family:var(--disp)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.bell{position:relative;padding:6px;color:var(--muted)}
+.bell:hover{color:#fff}
+.bell svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6}
+.bell .badge{position:absolute;top:0;right:0;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;display:grid;place-items:center;padding:0 3px;clip-path:var(--cut-tag)}
+.me{display:flex;align-items:center;gap:9px;padding-left:14px;border-left:1px solid var(--line)}
+.me .av{width:30px;height:30px;background:var(--maroon);border:1px solid var(--edge);display:grid;place-items:center;font-family:var(--disp);font-weight:700;font-size:12px}
+.me .mn{font-size:11.5px;line-height:1.25}
+.me .mr{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em}
+
+#view{padding:24px 22px 60px;max-width:1360px;width:100%}
+.sec-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.kick{font-size:10px;color:var(--red);letter-spacing:.3em;text-transform:uppercase;font-family:var(--disp);font-weight:600}
+.sec-sub{color:var(--muted);font-size:12px;margin:3px 0 0;max-width:70ch}
+.rule{height:1px;background:linear-gradient(90deg,var(--red),rgba(228,24,26,.12) 34%,var(--line) 34%,var(--line));margin:14px 0 22px}
+
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;border:1px solid var(--edge);background:
+  radial-gradient(700px 300px at 88% -30%, #5c0000 0%, rgba(92,0,0,0) 70%),
+  linear-gradient(100deg,#0d0404 0%,#070707 55%,#120303 100%);
+  padding:26px 24px;margin-bottom:26px}
+.hero .dots{position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(228,24,26,.55) 1px,transparent 1.1px);
+  background-size:9px 9px;
+  -webkit-mask-image:linear-gradient(105deg,rgba(0,0,0,.9),transparent 52%);
+  mask-image:linear-gradient(105deg,rgba(0,0,0,.9),transparent 52%);opacity:.5}
+.hero .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px)}
+.hero .sweep{position:absolute;left:0;right:0;top:-90px;height:90px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(228,24,26,0),rgba(228,24,26,.10),rgba(228,24,26,0));animation:sweep 7s linear infinite}
+@keyframes sweep{0%{transform:translateY(0)}100%{transform:translateY(calc(100% + 420px))}}
+.hero .fp{position:absolute;right:-20px;bottom:-56px;width:236px;opacity:.1;pointer-events:none}
+.hero-in{position:relative;display:flex;gap:26px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between}
+.hero .lead{font-size:12.5px;color:var(--muted);max-width:56ch;margin:9px 0 0}
+.cursor{display:inline-block;width:8px;height:1em;background:var(--red);animation:bl 1s steps(1) infinite;margin-left:2px;vertical-align:-2px}
+@keyframes bl{50%{opacity:0}}
+.hero-clock{text-align:right}
+.hero-clock .t{font-size:26px;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+
+/* ---------- cards ---------- */
+.card{position:relative;background:var(--surface);border:1px solid var(--line);padding:16px;transition:.16s}
+.card::after{content:"";position:absolute;top:0;right:0;width:12px;height:12px;background:linear-gradient(225deg,var(--red) 0 50%,transparent 50%);opacity:.7}
+.card.click{cursor:pointer;text-align:left;width:100%;display:block}
+.card.click:hover{border-color:var(--edge);box-shadow:var(--glow);transform:translateY(-2px);background:var(--surface2)}
+.card.click:hover::after{opacity:1}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(auto-fill,minmax(286px,1fr))}
+.g4{grid-template-columns:repeat(auto-fill,minmax(196px,1fr))}
+.g-sum{grid-template-columns:repeat(auto-fit,minmax(186px,1fr))}
+.dash{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+
+.tag{display:inline-block;padding:2.5px 11px 2.5px 8px;font-size:9.5px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;font-family:var(--disp);clip-path:var(--cut-tag);white-space:nowrap}
+.t-ongoing{background:rgba(228,24,26,.16);color:#ff5b5c;box-shadow:inset 0 0 0 1px var(--edge)}
+.t-completed{background:rgba(63,191,111,.12);color:var(--ok);box-shadow:inset 0 0 0 1px rgba(63,191,111,.38)}
+.t-soon{background:rgba(138,138,138,.1);color:var(--dim);box-shadow:inset 0 0 0 1px #3a3a3a}
+.t-over{background:var(--red);color:#fff}
+.dot{width:7px;height:7px;background:var(--red);display:inline-block;margin-right:6px}
+.dot.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(228,24,26,.6)}50%{opacity:.5;box-shadow:0 0 0 5px rgba(228,24,26,0)}}
+
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;font-family:var(--disp);font-weight:700;
+  font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;background:var(--red);color:#fff;clip-path:var(--cut-btn);transition:.15s}
+.btn:hover{background:#ff2b2d;box-shadow:var(--glow)}
+.btn.ghost{background:#151515;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.btn.ghost:hover{color:#fff;box-shadow:inset 0 0 0 1px var(--edge),var(--glow)}
+.btn.sm{padding:6px 12px;font-size:10.5px}
+
+.tabs{display:flex;gap:2px;flex-wrap:wrap;margin-bottom:18px}
+.tab{padding:9px 20px;font-family:var(--disp);font-weight:600;font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;
+  background:#101010;color:var(--dim);clip-path:var(--cut-btn);transition:.15s;box-shadow:inset 0 0 0 1px #222}
+.tab:hover{color:#fff}
+.tab.on{background:var(--red);color:#fff;box-shadow:none}
+.tab .n{opacity:.75;font-family:var(--mono);font-size:10.5px}
+
+.bar{height:5px;background:#1e1e1e;overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--maroon),var(--red));transition:width .35s ease}
+.bar.done i{background:linear-gradient(90deg,#17603a,var(--ok))}
+.meta{display:flex;gap:7px;align-items:center;color:var(--dim);font-size:11px;flex-wrap:wrap}
+.label{font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);font-family:var(--disp);font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.avs{display:flex;flex-wrap:wrap;gap:8px}
+.av-s{width:24px;height:24px;background:#1d0505;box-shadow:inset 0 0 0 1px var(--edge);display:grid;place-items:center;
+  font-family:var(--disp);font-weight:700;font-size:10px;color:#ff7a7b}
+
+/* ---------- countdown ---------- */
+.cd{display:flex;gap:4px;font-variant-numeric:tabular-nums}
+.cd span{background:#0b0b0b;box-shadow:inset 0 0 0 1px #2a1010;padding:5px 7px;min-width:40px;text-align:center;font-size:15px;font-weight:700;line-height:1.15;color:var(--red)}
+.cd span b{display:block;font-size:8px;color:var(--dim);font-weight:500;letter-spacing:.16em;font-family:var(--disp)}
+.cd.urgent span{color:#fff;background:var(--maroon-2);box-shadow:inset 0 0 0 1px var(--red)}
+.cd.past span{color:var(--dim)}
+
+/* ---------- deadline list ---------- */
+.dl{display:flex;flex-direction:column}
+.dl-row{display:flex;gap:14px;align-items:center;padding:13px 4px;border-bottom:1px solid #1b1b1b;flex-wrap:wrap;transition:.14s;text-align:left;width:100%}
+.dl-row:hover{background:rgba(228,24,26,.06)}
+.dl-row:last-child{border-bottom:0}
+.dl-row .idx{font-size:10px;color:#4a4a4a;width:22px;flex:0 0 22px}
+.dl-row .nm{flex:1;min-width:150px}
+.dl-row .nm b{font-family:var(--disp);letter-spacing:.05em;font-size:13px;text-transform:uppercase;display:block}
+
+/* ---------- calendar ---------- */
+.cal-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.cal-head .mo{font-family:var(--disp);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:14px;flex:1}
+.cal-nav{width:28px;height:28px;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--line);color:var(--muted)}
+.cal-nav:hover{color:#fff;box-shadow:inset 0 0 0 1px var(--edge)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:#1b1b1b;box-shadow:0 0 0 1px #1b1b1b}
+.cal .dow{background:#0c0c0c;text-align:center;padding:6px 0;font-size:9px;letter-spacing:.16em;color:var(--dim);font-family:var(--disp);font-weight:600}
+.cal .day{background:#0e0e0e;min-height:56px;padding:5px 6px;position:relative;text-align:left;font-size:11.5px;color:var(--muted);transition:.12s}
+.cal .day:hover{background:#161616;color:#fff}
+.cal .day.out{color:#3a3a3a;background:#090909}
+.cal .day.today{box-shadow:inset 0 0 0 1px var(--red);color:#fff}
+.cal .day.sel{background:rgba(228,24,26,.15);color:#fff}
+.cal .day .marks{position:absolute;left:6px;bottom:6px;display:flex;gap:3px}
+.cal .day .marks i{width:5px;height:5px;background:var(--red);display:block}
+.cal .day .marks i.ok{background:var(--ok)}
+.cal .day .marks i.soon{background:var(--dim)}
+.day-detail{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.day-detail .ev{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #171717;width:100%;text-align:left}
+.day-detail .ev:hover .evn{color:var(--red)}
+.day-detail .ev:last-child{border-bottom:0}
+
+/* ---------- checklist ---------- */
+.chk{display:flex;gap:11px;align-items:flex-start;padding:10px;background:#0e0e0e;box-shadow:inset 0 0 0 1px #1d1d1d;
+  width:100%;text-align:left;transition:.14s}
+.chk:hover{box-shadow:inset 0 0 0 1px var(--edge)}
+.chk .box{width:16px;height:16px;flex:0 0 16px;margin-top:2px;box-shadow:inset 0 0 0 1px #444;display:grid;place-items:center;transition:.14s}
+.chk.on .box{background:var(--ok);box-shadow:none}
+.chk.on .box svg{width:11px;height:11px;stroke:#04180d;stroke-width:3;fill:none}
+.chk.on .t{color:var(--dim);text-decoration:line-through;text-decoration-color:rgba(228,24,26,.7)}
+.chk .t{font-size:12.5px;line-height:1.45}
+.chk .who{font-size:10px;color:var(--dim)}
+.stack{display:flex;flex-direction:column;gap:7px}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(3px);z-index:100;display:flex;
+  align-items:flex-start;justify-content:center;padding:4vh 16px;overflow-y:auto}
+.modal{position:relative;width:min(880px,100%);background:var(--bg2);border:1px solid var(--edge);
+  box-shadow:0 0 40px rgba(228,24,26,.18);animation:mo .18s ease-out}
+@keyframes mo{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.modal-head{position:relative;overflow:hidden;padding:20px 22px;border-bottom:1px solid var(--line);
+  background:linear-gradient(100deg,#150404,#0a0a0a 70%)}
+.modal-head .dots{position:absolute;inset:0;background-image:radial-gradient(rgba(228,24,26,.5) 1px,transparent 1.1px);
+  background-size:8px 8px;-webkit-mask-image:linear-gradient(90deg,transparent 55%,#000);mask-image:linear-gradient(90deg,transparent 55%,#000);opacity:.45;pointer-events:none}
+.modal-body{padding:20px 22px 24px;display:flex;flex-direction:column;gap:20px}
+.close{position:absolute;top:12px;right:12px;width:30px;height:30px;display:grid;place-items:center;
+  background:#161616;box-shadow:inset 0 0 0 1px var(--line);color:var(--muted);z-index:2}
+.close:hover{color:#fff;background:var(--red);box-shadow:none}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.pane{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);padding:14px}
+.person{display:flex;gap:12px;align-items:flex-start;padding:10px;background:#0e0e0e;box-shadow:inset 0 0 0 1px #1d1d1d}
+.person .av{width:34px;height:34px;flex:0 0 34px;background:#1d0505;box-shadow:inset 0 0 0 1px var(--edge);
+  display:grid;place-items:center;font-family:var(--disp);font-weight:700;font-size:13px;color:#ff7a7b}
+.person .pn{display:block;font-size:13px;font-weight:500;line-height:1.35;color:var(--fg)}
+.person .pr2{display:block;margin-top:5px;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;line-height:1.4}
+.log{font-size:11px;color:var(--dim);border-left:1px solid var(--line);padding-left:12px;display:flex;flex-direction:column;gap:6px}
+.log b{color:var(--muted);font-weight:500}
+
+/* ---------- notif / inbox ---------- */
+.nrow{display:flex;gap:12px;padding:13px 14px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);
+  align-items:flex-start;width:100%;text-align:left;transition:.14s}
+.nrow:hover{box-shadow:inset 0 0 0 1px var(--edge)}
+.nrow.unread{background:linear-gradient(90deg,rgba(228,24,26,.1),var(--surface) 46%);box-shadow:inset 0 0 0 1px var(--edge)}
+.nrow .ni{width:30px;height:30px;flex:0 0 30px;display:grid;place-items:center;background:#1a0505;box-shadow:inset 0 0 0 1px var(--edge)}
+.nrow .ni svg{width:15px;height:15px;stroke:var(--red);fill:none;stroke-width:1.7}
+.nrow .nt{font-size:12.5px;line-height:1.5}
+.nrow .nd{font-size:10px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-top:3px}
+.trig{display:inline-block;padding:1px 7px;font-size:9px;font-family:var(--disp);font-weight:700;letter-spacing:.14em;
+  background:#1a0505;color:#ff5b5c;box-shadow:inset 0 0 0 1px var(--edge);clip-path:var(--cut-tag);margin-right:7px}
+.trig.h0{background:var(--red);color:#fff;box-shadow:none}
+.mailrow{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:12px;padding:12px 14px;
+  background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);align-items:start}
+.mailrow .sub{font-size:12.5px;font-weight:500}
+.mailrow .snip{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{background:#0d0d0d;box-shadow:inset 0 0 0 1px var(--line);border-left:2px solid var(--red);padding:14px 16px;font-size:12px;color:var(--muted)}
+.note code{background:#1a0505;color:#ff7a7b;padding:1px 5px;font-size:11px}
+.sample-flag{display:inline-flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--warn);font-family:var(--disp);font-weight:600}
+.sample-flag::before{content:"";width:6px;height:6px;background:var(--warn)}
+
+.mgroup{margin-bottom:34px}
+.mgroup:last-child{margin-bottom:0}
+.mgroup-h{position:relative;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding-bottom:9px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.mgroup-h::after{content:"";position:absolute;left:0;bottom:-1px;width:72px;height:1px;background:var(--red)}
+.mgroup-h h3{font-size:13px;letter-spacing:.18em}
+.mgroup-h .meta{margin-left:auto}
+.advisor{position:relative;overflow:hidden;display:flex;gap:18px;align-items:center;flex-wrap:wrap;
+  padding:20px 22px;background:linear-gradient(100deg,#170404,#0b0b0b 70%);box-shadow:inset 0 0 0 1px var(--edge)}
+.advisor .fp{position:absolute;right:10px;top:-30px;width:150px;opacity:.09;pointer-events:none}
+.advisor .adv{width:58px;height:58px;font-size:20px;margin:0;display:grid}
+.advname{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.07em;font-size:16px;margin:7px 0 3px}
+.kv{display:flex;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px solid #181818}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--dim);flex:0 0 96px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.empty{padding:30px;text-align:center;color:var(--dim);font-size:12px;box-shadow:inset 0 0 0 1px var(--line);background:#0b0b0b}
+.stat{position:relative;padding:16px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.stat .v{font-family:var(--disp);font-size:32px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.stat .fp2{position:absolute;right:-14px;bottom:-22px;width:86px;opacity:.08}
+.stat.red .v{color:var(--red)}
+.stat.ok .v{color:var(--ok)}
+.kan{display:grid;gap:8px}
+.task{display:flex;gap:10px;align-items:center;padding:9px 11px;background:#0e0e0e;box-shadow:inset 0 0 0 1px #1d1d1d;width:100%;text-align:left;transition:.14s}
+.task:hover{box-shadow:inset 0 0 0 1px var(--edge)}
+.task .st{width:9px;height:9px;flex:0 0 9px}
+.task .st.todo{background:#3a3a3a}
+.task .st.doing{background:var(--red);animation:pulse 1.8s ease-in-out infinite}
+.task .st.done{background:var(--ok)}
+.task .tx{flex:1;font-size:12px;line-height:1.45}
+.task.done .tx{color:var(--dim);text-decoration:line-through;text-decoration-color:rgba(228,24,26,.6)}
+.task .stl{font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-family:var(--disp);font-weight:600;color:var(--dim)}
+
+
+/* ---------- autentikasi ---------- */
+.authwrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:5vh 16px;
+  background:radial-gradient(900px 520px at 78% -10%, #3A0000 0%, rgba(58,0,0,0) 62%),
+             radial-gradient(700px 600px at 0% 100%, #1e0000 0%, rgba(30,0,0,0) 60%), var(--bg)}
+.authbox{position:relative;overflow:hidden;width:min(430px,100%);padding:26px 26px 24px;
+  background:linear-gradient(150deg,#0e0505,#080808 60%);box-shadow:inset 0 0 0 1px var(--edge),0 0 44px rgba(228,24,26,.12)}
+.authbox .dots{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(228,24,26,.5) 1px,transparent 1.1px);
+  background-size:9px 9px;-webkit-mask-image:linear-gradient(120deg,rgba(0,0,0,.85),transparent 55%);
+  mask-image:linear-gradient(120deg,rgba(0,0,0,.85),transparent 55%);opacity:.45}
+.authbox .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px)}
+.authbox>*{position:relative}
+.authhead{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.authhead img{display:block;width:46px;height:auto}
+.aform{display:flex;flex-direction:column;gap:13px}
+.afield{display:flex;flex-direction:column;gap:5px}
+.ainput,.afield input,.afield select{width:100%;background:#0b0b0b;color:#fff;padding:9px 11px;font-size:12.5px;
+  font-family:var(--mono);border:0;box-shadow:inset 0 0 0 1px var(--line);outline:none;transition:.14s}
+.afield input:focus,.afield select:focus,.ainput:focus{box-shadow:inset 0 0 0 1px var(--edge),var(--glow)}
+.afield input::placeholder,.ainput::placeholder{color:#555}
+.aalt{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.aalt button{color:var(--red);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.ahint{margin-top:14px;background:#0d0d0d;box-shadow:inset 0 0 0 1px var(--line);border-left:2px solid var(--red);
+  padding:11px 13px;font-size:11px;color:var(--muted);line-height:1.55}
+.ahint code{background:#1a0505;color:#ff7a7b;padding:1px 5px}
+.aerr{background:rgba(228,24,26,.12);box-shadow:inset 0 0 0 1px var(--edge);padding:10px 12px;font-size:11.5px;
+  color:#ff8b8c;margin-bottom:14px}
+.anotice{background:#0d0d0d;box-shadow:inset 0 0 0 1px var(--line);border-left:2px solid var(--warn);
+  padding:10px 12px;font-size:11.5px;color:var(--muted);margin-bottom:14px}
+.await-ic{width:46px;height:46px;display:grid;place-items:center;background:#1a0505;
+  box-shadow:inset 0 0 0 1px var(--edge);margin-bottom:14px}
+.await-ic svg{width:24px;height:24px;stroke:var(--warn);fill:none;stroke-width:1.6}
+.await-ic.rej svg{stroke:var(--red)}
+.addrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.addrow .ainput{flex:1;min-width:150px}
+.logout{margin-left:6px;padding:6px;color:var(--dim)}
+.logout:hover{color:var(--red)}
+.logout svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7}
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:200;
+  background:#140404;box-shadow:inset 0 0 0 1px var(--edge),0 0 22px rgba(228,24,26,.25);
+  padding:11px 18px;font-size:12px;color:#fff;max-width:min(440px,92vw);
+  opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:840px){.me .tag{display:none}}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:1020px){.dash{grid-template-columns:1fr}}
+@media (max-width:840px){
+  #sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s ease}
+  #sidebar.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.9)}
+  .hamb{display:grid;place-items:center}
+  .railtoggle{display:none}
+  #shell.rail{--sidebar:246px}
+  .me .mn,.me .mr{display:none}
+  #view{padding:18px 16px 60px}
+  #topbar{padding:10px 16px}
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="ic-fp" viewBox="0 0 100 100">
+      <g fill="none" stroke="#E4181A" stroke-width="2.4" stroke-linecap="round">
+        <path d="M50 6C28 6 10 24 10 46v10"/><path d="M90 46c0-22-18-40-40-40"/>
+        <path d="M20 66c2-6 3-13 3-20 0-15 12-27 27-27s27 12 27 27c0 9-1 17-3 25"/>
+        <path d="M33 78c3-8 5-19 5-32a12 12 0 0 1 24 0c0 13-1 23-4 32"/>
+        <path d="M50 34v12"/><path d="M50 54c0 12-1 22-4 32"/>
+        <path d="M66 60c0 10-1 20-3 28"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="shell">
+  <aside id="sidebar">
+    <div class="brand">
+      <img src="logo.png" alt="Logo Foresty Laboratory" width="34" height="48">
+      <div class="btxt">
+        <div class="bt">FORESTY<br>LABORATORY</div>
+        <div class="bs">Forensics &amp; Security</div>
+      </div>
+    </div>
+    <span class="labshow">FORESTY MANAGEMENT</span>
+    <nav id="nav" aria-label="Menu utama"></nav>
+    <button class="railtoggle" id="rail" aria-label="Sembunyikan menu" aria-expanded="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      <span class="ntxt">Sembunyikan</span>
+    </button>
+    <div class="sidefoot">
+      SESSION <b>ACTIVE</b><br>
+      <span id="sync">STORAGE · LOCAL</span>
+    </div>
+  </aside>
+
+  <div id="main">
+    <header id="topbar">
+      <button class="hamb" id="hamb" aria-label="Buka menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="search">
+        <span class="pr" aria-hidden="true">&gt;</span>
+        <input id="q" type="search" placeholder="search program / divisi / anggota..." autocomplete="off" aria-label="Pencarian">
+        <div class="results" id="results" hidden></div>
+      </div>
+      <div class="tb-right">
+        <button class="bell" id="bell" aria-label="Notifikasi">
+          <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="badge" id="bellCount">0</span>
+        </button>
+        <div class="me" id="me">
+          <div class="av">RT</div>
+          <div>
+            <div class="mn">Ramadhan T. Defender</div>
+            <div class="mr">Coordinator</div>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="authRoot" hidden></div>
+<div id="modalRoot"></div>
+<script>
+/* ============================================================
+   FORESTY LAB CONSOLE — periode 2026/2027
+   Prototipe front-end. Semua data di bawah adalah DATA CONTOH
+   dan harus diganti dengan data asli / API backend lab.
+   ============================================================ */
+
+const ADVISOR = {
+  name:"Assoc. Prof. Dr. Vera Suryani, S.T., M.T.",
+  role:"Advisor of Forensic & Security Laboratory",
+  init:"VS"
+};
+
+const MEMBERS = [
+  {id:"m01", name:"Ramadhan Tangguh Defender",   role:"Coordinator",              div:"Pengurus Inti"},
+  {id:"m02", name:"Harsya Brahmantyo Wibowo",    role:"Vice Coordinator",         div:"Pengurus Inti"},
+  {id:"m03", name:"Nathasya Yuan Maharani",      role:"Secretary",                div:"Sekretariat"},
+  {id:"m04", name:"Sarah Nur Aqilah Tanjung",    role:"Treasurer",                div:"Sekretariat"},
+
+  {id:"m05", name:"Fathimah Radhiyya",           role:"Coordinator HR",           div:"Human Resource"},
+  {id:"m06", name:"Paul Deniel Jagasa Ginting",  role:"Staff HR",                 div:"Human Resource"},
+  {id:"m07", name:"Faishal Subkhan Ramadhan",    role:"Staff HR",                 div:"Human Resource"},
+  {id:"m08", name:"Nelson Arbet",                role:"Staff HR",                 div:"Human Resource"},
+  {id:"m09", name:"Rendra Ilham Saputra",        role:"Staff HR",                 div:"Human Resource"},
+
+  {id:"m10", name:"Fauzan Zulfa Muhammad",       role:"Coordinator Media & Partner", div:"Media & Partner"},
+  {id:"m11", name:"Fazli Rabbi",                 role:"Staff Media & Partner",    div:"Media & Partner"},
+  {id:"m12", name:"Alya Khairunnisa",            role:"Staff Media & Partner",    div:"Media & Partner"},
+  {id:"m13", name:"Muhammad Ghassan Firdian",    role:"Staff Media & Partner",    div:"Media & Partner"},
+  {id:"m14", name:"Diertri Wira Satya",          role:"Staff Media & Partner",    div:"Media & Partner"},
+
+  {id:"m15", name:"Muhammad Meizar Salman",      role:"Coordinator Study Group",  div:"Study Group"},
+  {id:"m16", name:"William",                     role:"Staff Study Group",        div:"Study Group"},
+  {id:"m17", name:"Laksamana Hendry Armada Sakti",role:"Staff Study Group",       div:"Study Group"},
+  {id:"m18", name:"Joshua Prasetyo Sadewo Paundu",role:"Staff Study Group",       div:"Study Group"},
+  {id:"m19", name:"Ali Andriansyah",             role:"Staff Study Group",        div:"Study Group"},
+
+  {id:"m20", name:"Muhamad Alwan Suryadi",       role:"Coordinator Research & Development",          div:"Research & Development"},
+  {id:"m21", name:"Zaidan Kamil Munadi",         role:"Research & Development Team", div:"Research & Development"},
+  {id:"m22", name:"Mohammad Rizki Dwi Saputra",  role:"Research & Development Team", div:"Research & Development"},
+  {id:"m23", name:"M. Pasya Alfaridzi",          role:"Research & Development Team", div:"Research & Development"},
+  {id:"m24", name:"Lutfi Ghifari Hibban",        role:"Research & Development Team", div:"Research & Development"},
+  {id:"m25", name:"Roby Ariga Siagian",          role:"Research & Development Team", div:"Research & Development"},
+  {id:"m26", name:"Witness Moses Simanjuntak",   role:"Research & Development Team", div:"Research & Development"},
+];
+
+/* Program kerja di bawah ini masih CONTOH — ganti judul, tanggal, dan checklist
+   dengan proker asli. Struktur PIC sudah memakai nama pengurus sebenarnya. */
+const PROGRAMS = [
+  {id:"p4", title:"Rapat Koordinasi Divisi", status:"ongoing", date:"2026-09-15T09:00", place:"Ruang Lab F-203",
+   desc:"Rapat koordinasi lintas divisi bulanan. Membahas progres program kerja triwulan, kendala tiap divisi, dan penetapan timeline Lab Show 26/27.",
+   pics:["m01","m03"],
+   checklist:[
+     {id:"c1", text:"Susun agenda rapat & undangan", who:"m03", done:true},
+     {id:"c2", text:"Booking Ruang Lab F-203", who:"m03", done:true},
+     {id:"c3", text:"Kumpulkan laporan progres tiap koordinator", who:"m01", done:false, due:"2026-09-14T17:00"},
+     {id:"c4", text:"Siapkan notulensi & daftar hadir", who:"m03", done:false},
+   ],
+   log:[{t:"2026-09-12", s:"Nathasya menandai 'Booking Ruang Lab F-203' selesai"},
+        {t:"2026-09-10", s:"Ramadhan membuat program & menetapkan checklist"}]},
+
+  {id:"p3", title:"Workshop Digital Forensics #1", status:"ongoing", date:"2026-09-19T13:00", place:"Lab Komputer 2",
+   desc:"Workshop internal angkatan baru: akuisisi image disk dengan FTK Imager, verifikasi hash SHA-256, dan analisis artefak Windows (prefetch, registry hive, $MFT).",
+   pics:["m20","m15"],
+   checklist:[
+     {id:"c1", text:"Finalisasi modul & studi kasus", who:"m20", done:true},
+     {id:"c2", text:"Siapkan image sampel + write blocker", who:"m21", done:true},
+     {id:"c3", text:"Instalasi Autopsy di 20 workstation", who:"m22", done:false, due:"2026-09-17T16:00"},
+     {id:"c4", text:"Rekap pendaftaran peserta", who:"m15", done:false},
+     {id:"c5", text:"Cetak sertifikat peserta", who:"m16", done:false},
+   ],
+   log:[{t:"2026-09-13", s:"Zaidan menandai 'Siapkan image sampel' selesai"},
+        {t:"2026-09-08", s:"Alwan mengunggah modul v2"}]},
+
+  {id:"p2", title:"Open Recruitment Aslab", status:"ongoing", date:"2026-09-22T09:00", place:"Online + Lab F-203",
+   desc:"Rekrutmen asisten laboratorium periode berikutnya. Tiga tahap: seleksi berkas, tes teknis (forensik & jaringan), dan wawancara.",
+   pics:["m05","m06"],
+   checklist:[
+     {id:"c1", text:"Buka form pendaftaran & publikasi poster", who:"m12", done:true},
+     {id:"c2", text:"Susun soal tes teknis", who:"m05", done:true},
+     {id:"c3", text:"Seleksi berkas pendaftar", who:"m06", done:false, due:"2026-09-20T23:59"},
+     {id:"c4", text:"Jadwalkan sesi wawancara", who:"m07", done:false},
+     {id:"c5", text:"Umumkan hasil & onboarding", who:"m05", done:false},
+   ],
+   log:[{t:"2026-09-11", s:"Alya mempublikasikan poster oprec"},
+        {t:"2026-09-05", s:"Fathimah membuat program"}]},
+
+  {id:"p1", title:"Foresty Lab Show 26/27", status:"ongoing", date:"2026-10-11T08:00", place:"Aula Fakultas",
+   desc:"Acara puncak laboratorium: pameran hasil riset, talkshow praktisi keamanan siber, demo live forensics, dan peluncuran identitas Foresty 26/27.",
+   pics:["m02","m10","m12"],
+   checklist:[
+     {id:"c1", text:"Rilis identitas visual & key visual", who:"m10", done:true},
+     {id:"c2", text:"Booking Aula Fakultas", who:"m02", done:true},
+     {id:"c3", text:"Surat izin kegiatan ke dekanat", who:"m03", done:false, due:"2026-09-25T15:00"},
+     {id:"c4", text:"Kontak pembicara talkshow", who:"m11", done:false},
+     {id:"c5", text:"Desain merchandise & banner", who:"m13", done:false},
+     {id:"c6", text:"Rundown acara & briefing panitia", who:"m02", done:false},
+     {id:"c7", text:"RAB & konsumsi", who:"m04", done:false},
+   ],
+   log:[{t:"2026-09-09", s:"Fauzan merilis key visual v1"},
+        {t:"2026-08-28", s:"Harsya mengonfirmasi booking aula"}]},
+
+  {id:"p7", title:"CTF Internal — REDSHIFT", status:"soon", date:"2026-11-08T08:00", place:"Lab Komputer 1 & 2",
+   desc:"Kompetisi Capture The Flag internal lab. Kategori: forensics, web exploitation, cryptography, dan network analysis. Format jeopardy 8 jam.",
+   pics:["m15","m20"],
+   checklist:[
+     {id:"c1", text:"Susun soal per kategori (min. 20 soal)", who:"m15", done:false},
+     {id:"c2", text:"Siapkan platform CTFd & server", who:"m23", done:false},
+     {id:"c3", text:"Uji coba soal (playtest)", who:"m17", done:false},
+     {id:"c4", text:"Siapkan hadiah & sertifikat", who:"m18", done:false},
+   ], log:[{t:"2026-09-02", s:"Meizar membuat draft kategori soal"}]},
+
+  {id:"p8", title:"Lab Tour & Open House", status:"soon", date:"2026-11-22T09:00", place:"Gedung Lab Lt. 2",
+   desc:"Membuka lab untuk mahasiswa baru: tur fasilitas forensik, demo alat akuisisi, dan sesi tanya jawab bersama aslab.",
+   pics:["m10","m07"],
+   checklist:[
+     {id:"c1", text:"Susun alur tur & titik demo", who:"m07", done:false},
+     {id:"c2", text:"Siapkan materi display & poster riset", who:"m14", done:false},
+     {id:"c3", text:"Jadwal piket aslab pemandu", who:"m08", done:false},
+   ], log:[]},
+
+  {id:"p9", title:"Publikasi Jurnal Riset", status:"soon", date:"2026-12-05T23:59", place:"Daring",
+   desc:"Submit dua naskah hasil riset lab: analisis artefak aplikasi pesan terenkripsi, dan deteksi anomali trafik berbasis machine learning.",
+   pics:["m20","m21"],
+   checklist:[
+     {id:"c1", text:"Finalisasi naskah 1 (artefak aplikasi pesan)", who:"m24", done:false},
+     {id:"c2", text:"Finalisasi naskah 2 (deteksi anomali trafik)", who:"m25", done:false},
+     {id:"c3", text:"Review internal & cek plagiarisme", who:"m20", done:false},
+     {id:"c4", text:"Submit ke jurnal target", who:"m21", done:false},
+   ], log:[]},
+
+  {id:"p5", title:"Upgrading Internal Lab", status:"completed", date:"2026-08-30T08:00", place:"Ruang Lab F-203",
+   desc:"Pembekalan pengurus: standar operasional lab, etika penanganan barang bukti digital, dan chain of custody.",
+   pics:["m05","m02"],
+   checklist:[
+     {id:"c1", text:"Susun materi SOP lab", who:"m26", done:true},
+     {id:"c2", text:"Undang pemateri eksternal", who:"m05", done:true},
+     {id:"c3", text:"Konsumsi & dokumentasi", who:"m09", done:true},
+     {id:"c4", text:"Laporan kegiatan", who:"m03", done:true},
+   ], log:[{t:"2026-08-31", s:"Nathasya mengunggah laporan kegiatan"}]},
+
+  {id:"p6", title:"Serah Terima Jabatan", status:"completed", date:"2026-08-09T09:00", place:"Aula Mini Fakultas",
+   desc:"Pergantian kepengurusan ke periode 26/27, termasuk serah terima inventaris lab dan arsip kesekretariatan.",
+   pics:["m01","m02"],
+   checklist:[
+     {id:"c1", text:"Rekap inventaris lab", who:"m04", done:true},
+     {id:"c2", text:"Susunan acara & undangan", who:"m03", done:true},
+     {id:"c3", text:"Berita acara serah terima", who:"m01", done:true},
+   ], log:[{t:"2026-08-09", s:"Program ditandai selesai oleh Ramadhan"}]},
+];
+
+/* Tugas per divisi masih CONTOH — sesuaikan dengan job description asli. */
+const DIVISIONS = [
+  {id:"d1", name:"Coordinator & Vice Coordinator", tagline:"Komando lab, koordinasi lintas divisi, dan pertanggungjawaban periode.",
+   people:[
+     {m:"m01", tasks:[
+       {id:"t1", text:"Menyusun laporan pertanggungjawaban periode 26/27", st:"doing"},
+       {id:"t2", text:"Memimpin rapat koordinasi divisi bulanan", st:"doing"},
+       {id:"t3", text:"Menjalin kerja sama dengan lab & komunitas eksternal", st:"todo"},
+       {id:"t4", text:"Menetapkan timeline program kerja satu periode", st:"done"},
+       {id:"t5", text:"Koordinasi berkala dengan dosen pembimbing lab", st:"doing"},
+     ]},
+     {m:"m02", tasks:[
+       {id:"t1", text:"Mengawal persiapan Foresty Lab Show 26/27", st:"doing"},
+       {id:"t2", text:"Mengontrol progres checklist tiap program", st:"doing"},
+       {id:"t3", text:"Mewakili coordinator pada forum fakultas", st:"todo"},
+     ]},
+   ]},
+
+  {id:"d2", name:"Secretary & Treasurer", tagline:"Administrasi, arsip, dan seluruh lalu lintas keuangan lab.",
+   people:[
+     {m:"m03", tasks:[
+       {id:"t1", text:"Membuat surat peminjaman ruang & alat", st:"done"},
+       {id:"t2", text:"Notulensi rapat dan distribusi hasil rapat", st:"doing"},
+       {id:"t3", text:"Mengelola arsip digital kesekretariatan", st:"doing"},
+       {id:"t4", text:"Rekap presensi pengurus & aslab", st:"todo"},
+     ]},
+     {m:"m04", tasks:[
+       {id:"t1", text:"Membuat sheet kas lab 26/27", st:"done"},
+       {id:"t2", text:"Rekap pemasukan & pengeluaran per program", st:"doing"},
+       {id:"t3", text:"Menyusun RAB Foresty Lab Show", st:"doing"},
+       {id:"t4", text:"Laporan keuangan akhir periode", st:"todo"},
+     ]},
+   ]},
+
+  {id:"d3", name:"Human Resource", tagline:"Rekrutmen, pembinaan, dan kesehatan internal anggota lab.",
+   people:[
+     {m:"m05", tasks:[
+       {id:"t1", text:"Menjalankan open recruitment aslab", st:"doing"},
+       {id:"t2", text:"Menyusun soal & rubrik tes teknis", st:"done"},
+       {id:"t3", text:"Evaluasi kinerja pengurus tengah periode", st:"todo"},
+     ]},
+     {m:"m06", tasks:[
+       {id:"t1", text:"Seleksi berkas pendaftar oprec", st:"doing"},
+       {id:"t2", text:"Mengelola database anggota lab", st:"doing"},
+     ]},
+     {m:"m07", tasks:[
+       {id:"t1", text:"Menjadwalkan sesi wawancara kandidat", st:"todo"},
+       {id:"t2", text:"Menyusun alur onboarding aslab baru", st:"todo"},
+     ]},
+     {m:"m08", tasks:[
+       {id:"t1", text:"Agenda keakraban internal (bonding)", st:"todo"},
+       {id:"t2", text:"Rekap presensi kegiatan lab", st:"doing"},
+     ]},
+     {m:"m09", tasks:[
+       {id:"t1", text:"Konsumsi & kebutuhan logistik kegiatan", st:"done"},
+       {id:"t2", text:"Piket kebersihan & inventaris ruang lab", st:"doing"},
+     ]},
+   ]},
+
+  {id:"d4", name:"Media & Partner", tagline:"Identitas visual, publikasi, dokumentasi, dan hubungan mitra.",
+   people:[
+     {m:"m10", tasks:[
+       {id:"t1", text:"Menjaga konsistensi identitas visual 26/27", st:"done"},
+       {id:"t2", text:"Mengelola kalender konten media sosial", st:"doing"},
+       {id:"t3", text:"Desain key visual & rundown Lab Show", st:"doing"},
+     ]},
+     {m:"m11", tasks:[
+       {id:"t1", text:"Menghubungi calon pembicara & mitra acara", st:"doing"},
+       {id:"t2", text:"Menyusun proposal sponsorship", st:"todo"},
+     ]},
+     {m:"m12", tasks:[
+       {id:"t1", text:"Desain poster tiap program kerja", st:"doing"},
+       {id:"t2", text:"Publikasi open recruitment", st:"done"},
+     ]},
+     {m:"m13", tasks:[
+       {id:"t1", text:"Desain merchandise dan banner", st:"todo"},
+       {id:"t2", text:"Maintenance aset desain & brand kit", st:"doing"},
+     ]},
+     {m:"m14", tasks:[
+       {id:"t1", text:"Dokumentasi foto & video kegiatan", st:"doing"},
+       {id:"t2", text:"Menyiapkan materi display & poster riset", st:"todo"},
+     ]},
+   ]},
+
+  {id:"d5", name:"Study Group", tagline:"Pembinaan teknis rutin: kelas internal, latihan CTF, dan kurikulum aslab.",
+   people:[
+     {m:"m15", tasks:[
+       {id:"t1", text:"Menyusun silabus study group satu semester", st:"done"},
+       {id:"t2", text:"Menyusun soal CTF internal REDSHIFT", st:"doing"},
+       {id:"t3", text:"Rekap kehadiran & progres peserta", st:"todo"},
+     ]},
+     {m:"m16", tasks:[
+       {id:"t1", text:"Mengisi kelas kriptografi dasar", st:"doing"},
+       {id:"t2", text:"Menyiapkan sertifikat peserta workshop", st:"todo"},
+     ]},
+     {m:"m17", tasks:[
+       {id:"t1", text:"Playtest soal CTF sebelum rilis", st:"todo"},
+       {id:"t2", text:"Menyusun materi web exploitation", st:"doing"},
+     ]},
+     {m:"m18", tasks:[
+       {id:"t1", text:"Menyiapkan hadiah & sertifikat kompetisi", st:"todo"},
+       {id:"t2", text:"Mendampingi peserta latihan mingguan", st:"doing"},
+     ]},
+     {m:"m19", tasks:[
+       {id:"t1", text:"Menyusun materi network analysis", st:"doing"},
+       {id:"t2", text:"Dokumentasi writeup latihan", st:"todo"},
+     ]},
+   ]},
+
+  {id:"d6", name:"Research & Development Team", tagline:"Riset forensik digital, keamanan jaringan, dan pengembangan tools lab.",
+   people:[
+     {m:"m20", tasks:[
+       {id:"t1", text:"Mengkoordinasi dua naskah publikasi jurnal", st:"doing"},
+       {id:"t2", text:"Menyusun kurikulum workshop forensik", st:"done"},
+       {id:"t3", text:"Review internal naskah & cek plagiarisme", st:"todo"},
+     ]},
+     {m:"m21", tasks:[
+       {id:"t1", text:"Menyiapkan image sampel & write blocker", st:"done"},
+       {id:"t2", text:"Submit naskah ke jurnal target", st:"todo"},
+     ]},
+     {m:"m22", tasks:[
+       {id:"t1", text:"Instalasi & maintenance workstation forensik", st:"doing"},
+       {id:"t2", text:"Menyusun toolset standar praktikum", st:"doing"},
+     ]},
+     {m:"m23", tasks:[
+       {id:"t1", text:"Menyiapkan platform CTFd & infrastruktur", st:"todo"},
+       {id:"t2", text:"Riset hardening server lab", st:"doing"},
+     ]},
+     {m:"m24", tasks:[
+       {id:"t1", text:"Riset artefak aplikasi pesan terenkripsi", st:"doing"},
+       {id:"t2", text:"Menulis naskah publikasi pertama", st:"doing"},
+     ]},
+     {m:"m25", tasks:[
+       {id:"t1", text:"Riset deteksi anomali trafik jaringan", st:"doing"},
+       {id:"t2", text:"Menyiapkan dataset & pipeline eksperimen", st:"todo"},
+     ]},
+     {m:"m26", tasks:[
+       {id:"t1", text:"Menyusun SOP penanganan barang bukti digital", st:"done"},
+       {id:"t2", text:"Dokumentasi hasil riset ke repositori lab", st:"doing"},
+     ]},
+   ]},
+];
+
+const LAB_EMAIL = "forestylab@gmail.com";
+/* Contoh tampilan mini-inbox. BUKAN email asli — ganti dengan hasil Gmail API. */
+const INBOX_SAMPLE = [
+  {from:"Dekanat FT", subject:"Balasan permohonan izin kegiatan Lab Show", snippet:"Sehubungan dengan surat nomor 042/FRSTY/IX/2026, izin penggunaan Aula...", t:"09:24"},
+  {from:"Himpunan Mahasiswa TI", subject:"Undangan kolaborasi seminar keamanan siber", snippet:"Kami bermaksud mengajak Foresty Laboratory sebagai co-host pada...", t:"Kemarin"},
+  {from:"CTFd Support", subject:"Your instance is ready", snippet:"Your CTFd instance redshift.foresty has finished provisioning...", t:"12 Sep"},
+  {from:"Perpustakaan Pusat", subject:"Konfirmasi peminjaman ruang diskusi", snippet:"Peminjaman ruang diskusi lantai 3 pada 19 September telah dikonfirmasi...", t:"11 Sep"},
+];
+
+/* ---------------- helpers ---------------- */
+const $ = (s, r=document) => r.querySelector(s);
+const byId = id => MEMBERS.find(m => m.id === id);
+const prog = id => PROGRAMS.find(p => p.id === id);
+const ini = n => n.split(" ").filter(Boolean).slice(0,2).map(w => w[0]).join("").toUpperCase();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const MO = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const DW = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+const dt = s => new Date(s);
+const fDate = d => `${d.getDate()} ${MO[d.getMonth()]} ${d.getFullYear()}`;
+const fShort = d => `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
+const fTime = d => `${String(d.getHours()).padStart(2,"0")}.${String(d.getMinutes()).padStart(2,"0")}`;
+const key = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const STATUS_LABEL = {ongoing:"Ongoing", completed:"Completed", soon:"Coming Soon"};
+const ST_LABEL = {todo:"Belum", doing:"Proses", done:"Selesai"};
+
+/* ---------------- state (per-perangkat, localStorage) ---------------- */
+const SKEY = "foresty2627.state.v1";
+let STATE = {checks:{}, tasks:{}, read:[]};
+try { const raw = localStorage.getItem(SKEY); if (raw) STATE = Object.assign(STATE, JSON.parse(raw)); } catch(e){}
+function save(){ try { localStorage.setItem(SKEY, JSON.stringify(STATE)); } catch(e){} }
+
+const isChecked = (p, c) => STATE.checks?.[p.id]?.[c.id] ?? c.done;
+function toggleCheck(pid, cid){
+  const p = prog(pid), c = checksOf(p).find(x => x.id === cid);
+  STATE.checks[pid] = STATE.checks[pid] || {};
+  STATE.checks[pid][cid] = !isChecked(p, c);
+  save();
+}
+const taskSt = (d, mid, t) => STATE.tasks?.[`${d.id}.${mid}.${t.id}`] ?? t.st;
+function cycleTask(did, mid, tid){
+  const d = DIVISIONS.find(x => x.id === did);
+  const per = d.people.find(x => x.m === mid);
+  const t = tasksOf(d, mid).find(x => x.id === tid);
+  const order = ["todo","doing","done"];
+  const next = order[(order.indexOf(taskSt(d, mid, t)) + 1) % 3];
+  STATE.tasks[`${did}.${mid}.${tid}`] = next;
+  save();
+}
+const progress = p => {
+  const list = checksOf(p);
+  const done = list.filter(c => isChecked(p, c)).length;
+  return {done, total: list.length, pct: list.length ? Math.round(done / list.length * 100) : 0};
+};
+
+/* ---------------- notifikasi (H-3 / H-1 / H-0) ---------------- */
+const RULES = [{d:3, l:"H-3"}, {d:1, l:"H-1"}, {d:0, l:"H-0"}];
+function buildNotifs(){
+  const now = new Date(), out = [];
+  for (const p of PROGRAMS){
+    if (p.status === "completed") continue;
+    const when = dt(p.date);
+    for (const r of RULES){
+      const fire = new Date(when); fire.setDate(fire.getDate() - r.d); fire.setHours(7,0,0,0);
+      if (fire > now) continue;
+      const kata = r.d === 0 ? "hari ini" : r.d === 1 ? "besok" : `${r.d} hari lagi`;
+      out.push({
+        id:`${p.id}:${r.l}`, trig:r.l, fire, pid:p.id, kind:"event",
+        text:`Reminder: <b>${esc(p.title)}</b> akan berlangsung ${kata}, ${fDate(when)} pukul ${fTime(when)} di ${esc(p.place)}.`
+      });
+    }
+    for (const c of checksOf(p)){
+      if (!c.due || isChecked(p, c)) continue;
+      const due = dt(c.due);
+      const fire = new Date(due); fire.setDate(fire.getDate() - 1); fire.setHours(7,0,0,0);
+      if (fire > now) continue;
+      const late = due < now;
+      out.push({
+        id:`${p.id}:${c.id}:due`, trig: late ? "OVERDUE" : "H-1", fire, pid:p.id, kind:"task", late,
+        text: late
+          ? `Terlambat: checklist <b>${esc(c.text)}</b> pada ${esc(p.title)} melewati tenggat ${fDate(due)} pukul ${fTime(due)}. PIC: ${esc(byId(c.who).name)}.`
+          : `Tenggat besok: checklist <b>${esc(c.text)}</b> pada ${esc(p.title)} jatuh tempo ${fDate(due)} pukul ${fTime(due)}. PIC: ${esc(byId(c.who).name)}.`
+      });
+    }
+  }
+  return out.sort((a,b) => b.fire - a.fire);
+}
+const unreadCount = () => buildNotifs().filter(n => !STATE.read.includes(n.id)).length;
+
+/* ---------------- events untuk kalender ---------------- */
+function allEvents(){
+  const ev = PROGRAMS.map(p => ({when: dt(p.date), title:p.title, pid:p.id, type:p.status, sub:p.place}));
+  for (const p of PROGRAMS)
+    for (const c of checksOf(p))
+      if (c.due) ev.push({when: dt(c.due), title:`Deadline: ${c.text}`, pid:p.id,
+        type: isChecked(p,c) ? "completed" : "ongoing", sub:`${p.title} · PIC ${byId(c.who).name}`});
+  return ev.sort((a,b) => a.when - b.when);
+}
+
+/* ---------------- fragmen UI ---------------- */
+const tag = s => `<span class="tag t-${s === "soon" ? "soon" : s}">${s === "ongoing" ? '<i class="dot pulse"></i>' : ""}${STATUS_LABEL[s]}</span>`;
+const avatars = ids => `<div class="avs">${ids.map(i => `<span class="av-s" title="${esc(byId(i).name)}">${ini(byId(i).name)}</span>`).join("")}</div>`;
+function countdown(iso){
+  return `<div class="cd num" data-ts="${dt(iso).getTime()}">
+    <span data-u="d">--<b>Hari</b></span><span data-u="h">--<b>Jam</b></span><span data-u="m">--<b>Min</b></span><span data-u="s">--<b>Det</b></span></div>`;
+}
+function tickCountdowns(){
+  const now = Date.now();
+  document.querySelectorAll(".cd[data-ts]").forEach(el => {
+    let ms = +el.dataset.ts - now;
+    const past = ms < 0; ms = Math.abs(ms);
+    const d = Math.floor(ms/864e5), h = Math.floor(ms/36e5)%24, m = Math.floor(ms/6e4)%60, s = Math.floor(ms/1e3)%60;
+    const v = {d, h, m, s};
+    el.querySelectorAll("span[data-u]").forEach(x => {
+      x.firstChild.nodeValue = String(v[x.dataset.u]).padStart(2,"0");
+    });
+    el.classList.toggle("past", past);
+    el.classList.toggle("urgent", !past && d < 2);
+  });
+}
+setInterval(tickCountdowns, 1000);
+
+/* ---------------- modal ---------------- */
+function openModal(html){
+  const root = $("#modalRoot");
+  root.innerHTML = `<div class="scrim" role="dialog" aria-modal="true">
+    <div class="modal">
+      <button class="close" data-close aria-label="Tutup">
+        <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" fill="none"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>${html}
+    </div></div>`;
+  root.querySelector(".scrim").addEventListener("click", e => { if (e.target.classList.contains("scrim")) closeModal(); });
+  root.querySelector("[data-close]").addEventListener("click", closeModal);
+  document.body.style.overflow = "hidden";
+  tickCountdowns();
+}
+function closeModal(){ $("#modalRoot").innerHTML = ""; document.body.style.overflow = ""; }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+/* ---------------- router ---------------- */
+const MENU = [
+  {id:"dashboard",    label:"Dashboard",    icon:'<path d="M3 12h6v9H3zM15 3h6v18h-6zM9 8h6v13H9z"/>'},
+  {id:"programs",     label:"Programs",     icon:'<path d="M4 4h16v16H4z"/><path d="M8 10h8M8 14h5"/>'},
+  {id:"division",     label:"Division",     icon:'<circle cx="12" cy="7" r="3"/><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M12 10v4M7 15l4-2M17 15l-4-2"/>'},
+  {id:"foresty",      label:"Foresty 26/27",icon:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 7h5M16 11h5M16 15h3"/>'},
+  {id:"notification", label:"Notification", icon:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'},
+  {id:"inbox",        label:"Inbox",        icon:'<path d="M3 5h18v14H3z"/><path d="M3 6l9 7 9-7"/>'},
+];
+let route = "dashboard";
+function go(r){ route = r; location.hash = r; render(); window.scrollTo({top:0}); $("#sidebar").classList.remove("open"); }
+window.addEventListener("hashchange", () => {
+  const r = location.hash.replace("#","");
+  if (r && r !== route && visibleMenu().some(m => m.id === r)) { route = r; render(); }
+});
+</script>
+<script>
+/* ---------------- view: DASHBOARD ---------------- */
+const _t0 = new Date();
+let calCursor = new Date(_t0.getFullYear(), _t0.getMonth(), 1);
+let calSel = null;
+
+function heroBlock(title, lead){
+  const now = new Date();
+  return `<section class="hero">
+    <div class="dots"></div><div class="scan"></div><div class="sweep"></div>
+    <svg class="fp" aria-hidden="true"><use href="#ic-fp"/></svg>
+    <div class="hero-in">
+      <div>
+        <div class="kick">Foresty Laboratory · Periode 2026 / 2027</div>
+        <h1>${esc(title)}<span class="cursor"></span></h1>
+        <p class="lead">${lead}</p>
+      </div>
+      <div class="hero-clock">
+        <div class="label">Waktu Sistem</div>
+        <div class="t num" id="clock">${fTime(now)}</div>
+        <div class="meta" style="justify-content:flex-end">${DW[now.getDay()]}, ${fDate(now)}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function viewDashboard(){
+  const now = new Date();
+  const upcoming = allEvents().filter(e => e.when >= new Date(now.getFullYear(), now.getMonth(), now.getDate())).slice(0, 6);
+  const ongoing = PROGRAMS.filter(p => p.status === "ongoing").length;
+  const openTasks = PROGRAMS.filter(p => p.status !== "completed")
+    .reduce((n, p) => n + checksOf(p).filter(c => !isChecked(p, c)).length, 0);
+  const unread = unreadCount();
+
+  const rows = upcoming.map((e, i) => `
+    <button class="dl-row" data-open-prog="${e.pid}">
+      <span class="idx num">${String(i+1).padStart(2,"0")}</span>
+      <span class="nm"><b>${esc(e.title)}</b><span class="meta">${esc(e.sub)} · ${fShort(e.when)} · ${fTime(e.when)}</span></span>
+      ${countdown(e.when.toISOString())}
+    </button>`).join("") || `<div class="empty">Tidak ada agenda terdekat.</div>`;
+
+  return heroBlock("Operations Console", `Pusat kendali program kerja, penugasan divisi, dan agenda Foresty Laboratory.
+      <span class="sample-flag" style="margin-left:8px">Data contoh</span>`) + `
+    <div class="grid g-sum" style="margin-bottom:22px">
+      ${stat("Program Ongoing", ongoing, "red", "dari " + PROGRAMS.length + " total program")}
+      ${stat("Checklist Belum Selesai", openTasks, "", "tersebar di program aktif")}
+      ${stat("Notifikasi Belum Dibaca", unread, unread ? "red" : "ok", "pemicu H-3 / H-1 / H-0")}
+      ${stat("Anggota Terdaftar", MEMBERS.length, "", DIVISIONS.length + " divisi kepengurusan")}
+    </div>
+
+    <div class="dash">
+      <section class="card">
+        <div class="sec-head"><div><div class="kick">Timeline</div><h2>Upcoming Deadlines &amp; Events</h2></div></div>
+        <div class="rule" style="margin:12px 0 6px"></div>
+        <div class="dl">${rows}</div>
+      </section>
+
+      <section class="card">
+        <div class="sec-head"><div><div class="kick">Kalender</div><h2>Agenda Bulanan</h2></div></div>
+        <div class="rule" style="margin:12px 0 14px"></div>
+        ${calendar()}
+      </section>
+    </div>`;
+}
+
+function stat(label, value, mod, sub){
+  return `<div class="stat ${mod}">
+    <svg class="fp2" aria-hidden="true"><use href="#ic-fp"/></svg>
+    <div class="label">${label}</div>
+    <div class="v num">${String(value).padStart(2,"0")}</div>
+    <div class="meta" style="margin-top:6px">${sub}</div>
+  </div>`;
+}
+
+function calendar(){
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  const first = new Date(y, m, 1), start = new Date(first);
+  start.setDate(1 - ((first.getDay() + 6) % 7));
+  const events = allEvents(), today = key(new Date());
+  const map = {};
+  events.forEach(e => { (map[key(e.when)] = map[key(e.when)] || []).push(e); });
+
+  let cells = "";
+  for (let i = 0; i < 42; i++){
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const k = key(d), evs = map[k] || [];
+    cells += `<button class="day${d.getMonth() !== m ? " out" : ""}${k === today ? " today" : ""}${k === calSel ? " sel" : ""}" data-day="${k}">
+      <span class="num">${String(d.getDate()).padStart(2,"0")}</span>
+      ${evs.length ? `<span class="marks">${evs.slice(0,4).map(e => `<i class="${e.type === "completed" ? "ok" : e.type === "soon" ? "soon" : ""}"></i>`).join("")}</span>` : ""}
+    </button>`;
+  }
+  const sel = calSel ? (map[calSel] || []) : [];
+  const detail = calSel ? `<div class="day-detail">
+      <div class="label" style="margin-bottom:6px">${DW[dt(calSel + "T00:00").getDay()]}, ${fDate(dt(calSel + "T00:00"))}</div>
+      ${sel.length ? sel.map(e => `<button class="ev" data-open-prog="${e.pid}">
+          <i class="dot" style="margin-top:7px;background:${e.type === "completed" ? "var(--ok)" : e.type === "soon" ? "var(--dim)" : "var(--red)"}"></i>
+          <span><span class="evn" style="font-size:12.5px">${esc(e.title)}</span>
+          <span class="meta">${fTime(e.when)} · ${esc(e.sub)}</span></span></button>`).join("")
+        : `<div class="meta">Tidak ada agenda pada tanggal ini.</div>`}
+    </div>` : `<div class="day-detail"><div class="meta">Pilih tanggal untuk melihat detail agenda.</div></div>`;
+
+  return `<div class="cal-head">
+      <span class="mo">${MO[m]} ${y}</span>
+      <button class="cal-nav" data-cal="-1" aria-label="Bulan sebelumnya">&lt;</button>
+      <button class="cal-nav" data-cal="0" aria-label="Bulan ini">•</button>
+      <button class="cal-nav" data-cal="1" aria-label="Bulan berikutnya">&gt;</button>
+    </div>
+    <div class="cal">${["Sen","Sel","Rab","Kam","Jum","Sab","Min"].map(d => `<span class="dow">${d}</span>`).join("")}${cells}</div>
+    ${detail}`;
+}
+
+/* ---------------- view: PROGRAMS ---------------- */
+let progTab = "ongoing";
+function viewPrograms(){
+  const count = s => PROGRAMS.filter(p => p.status === s).length;
+  const list = PROGRAMS.filter(p => p.status === progTab);
+  const cards = list.map(p => {
+    const pr = progress(p), d = dt(p.date);
+    return `<button class="card click" data-open-prog="${p.id}">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+        ${tag(p.status)}<span class="meta num">${fShort(d)}</span>
+      </div>
+      <h3 style="margin:11px 0 6px">${esc(p.title)}</h3>
+      <div class="meta" style="margin-bottom:12px">${esc(p.place)} · ${fTime(d)} WIB</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span class="label">Checklist</span>
+        <span class="num" style="font-size:11px;color:${pr.pct === 100 ? "var(--ok)" : "var(--red)"}">${pr.done}/${pr.total} · ${pr.pct}%</span>
+      </div>
+      <div class="bar${pr.pct === 100 ? " done" : ""}"><i style="width:${pr.pct}%"></i></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:13px">
+        ${avatars(p.pics)}
+        ${p.status === "completed" ? '<span class="meta">Selesai</span>' : `<span class="meta num">${cdShort(d)}</span>`}
+      </div>
+    </button>`;
+  }).join("") || `<div class="empty">Belum ada program pada kategori ini.</div>`;
+
+  return `<div class="sec-head"><div><div class="kick">Program Kerja</div><h1>Programs</h1>
+      <p class="sec-sub">Seluruh program kerja laboratorium periode 26/27. Klik kartu untuk membuka detail, PIC, dan checklist persiapan.</p></div></div>
+    <div class="rule"></div>
+    <div class="tabs">
+      ${["ongoing","completed","soon"].map(s => `<button class="tab${progTab === s ? " on" : ""}" data-tab="${s}">${STATUS_LABEL[s]} <span class="n">${String(count(s)).padStart(2,"0")}</span></button>`).join("")}
+    </div>
+    <div class="grid g3">${cards}</div>`;
+}
+function cdShort(d){
+  const ms = d - new Date();
+  if (ms < 0) return "Lewat " + Math.ceil(-ms / 864e5) + " hari";
+  const days = Math.ceil(ms / 864e5);
+  return days <= 1 ? "Kurang dari 24 jam" : "T-" + String(days).padStart(2,"0") + " hari";
+}
+
+function modalProgram(pid){
+  const p = prog(pid), pr = progress(p), d = dt(p.date);
+  const items = checksOf(p).map(c => {
+    const on = isChecked(p, c), late = c.due && !on && dt(c.due) < new Date();
+    return `<button class="chk${on ? " on" : ""}" data-check="${p.id}|${c.id}">
+      <span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 5"/></svg></span>
+      <span><span class="t">${esc(c.text)}</span>
+      <span class="who">PIC ${esc(byId(c.who).name)}${c.due ? ` · tenggat ${fShort(dt(c.due))} ${fTime(dt(c.due))}` : ""}
+      ${late ? '<span class="tag t-over" style="margin-left:6px">Overdue</span>' : ""}</span></span>
+    </button>`;
+  }).join("");
+
+  return `<div class="modal-head"><div class="dots"></div>
+      <div style="position:relative">
+        ${tag(p.status)}
+        <h2 style="margin:10px 0 6px">${esc(p.title)}</h2>
+        <div class="meta">${DW[d.getDay()]}, ${fDate(d)} · ${fTime(d)} WIB · ${esc(p.place)}</div>
+        ${p.status !== "completed" ? `<div style="margin-top:14px">${countdown(p.date)}</div>` : ""}
+      </div>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0;font-size:12.5px;color:var(--muted);max-width:70ch">${esc(p.desc)}</p>
+      <div class="cols">
+        <div class="pane">
+          <div class="label" style="margin-bottom:9px">Person in Charge</div>
+          <div class="stack">${p.pics.map(id => {
+            const m = byId(id);
+            return `<button class="person" data-open-member="${id}" style="width:100%;text-align:left">
+              <span class="av">${ini(m.name)}</span>
+              <span><span class="pn">${esc(m.name)}</span><span class="pr2">${esc(m.role)}</span></span></button>`;
+          }).join("")}</div>
+        </div>
+        <div class="pane">
+          <div class="label" style="margin-bottom:9px">Progres Persiapan</div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span class="num" style="font-family:var(--disp);font-size:30px;font-weight:700;color:${pr.pct === 100 ? "var(--ok)" : "var(--red)"}">${pr.pct}%</span>
+            <span class="meta">${pr.done} dari ${pr.total} item selesai</span>
+          </div>
+          <div class="bar${pr.pct === 100 ? " done" : ""}" style="margin-top:9px"><i style="width:${pr.pct}%"></i></div>
+          ${p.log.length ? `<div class="label" style="margin:16px 0 8px">Riwayat Aktivitas</div>
+            <div class="log">${p.log.map(l => `<span><b>${fShort(dt(l.t))}</b> — ${esc(l.s)}</span>`).join("")}</div>` : ""}
+        </div>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:9px">Checklist Keperluan &amp; Persiapan</div>
+        <div class="stack">${items}</div>
+        ${canAll() ? `<form class="addrow" data-addcheck="${p.id}">
+            <input class="ainput" name="text" placeholder="Tambah item checklist baru..." required>
+            <select class="ainput" name="who" style="max-width:190px">${MEMBERS.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>
+            <button class="btn sm" type="submit">Tambah</button>
+          </form>`
+          : `<div class="meta" style="margin-top:10px">Kamu hanya dapat mencentang item yang tercatat atas namamu.</div>`}
+      </div>
+    </div>`;
+}
+
+/* ---------------- view: DIVISION ---------------- */
+function viewDivision(){
+  const cards = DIVISIONS.map(d => {
+    const all = d.people.flatMap(p => tasksOf(d, p.m).map(t => taskSt(d, p.m, t)));
+    const done = all.filter(s => s === "done").length;
+    const pct = Math.round(done / all.length * 100);
+    return `<button class="card click" data-open-div="${d.id}">
+      <div class="label">Divisi</div>
+      <h3 style="margin:6px 0 7px">${esc(d.name)}</h3>
+      <p class="meta" style="min-height:34px">${esc(d.tagline)}</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
+        <span class="label">Tugas</span>
+        <span class="num" style="font-size:11px;color:${pct === 100 ? "var(--ok)" : "var(--red)"}">${done}/${all.length} · ${pct}%</span>
+      </div>
+      <div class="bar${pct === 100 ? " done" : ""}"><i style="width:${pct}%"></i></div>
+      <div style="margin-top:13px">${avatars(d.people.map(p => p.m))}</div>
+    </button>`;
+  }).join("");
+
+  return `<div class="sec-head"><div><div class="kick">Struktur Kepengurusan</div><h1>Division</h1>
+      <p class="sec-sub">Pembagian tugas tiap divisi, dikelompokkan per penanggung jawab. Klik status tugas untuk memutar: Belum → Proses → Selesai.</p></div></div>
+    <div class="rule"></div>
+    <div class="grid g3">${cards}</div>`;
+}
+
+function modalDivision(did){
+  const d = DIVISIONS.find(x => x.id === did);
+  const blocks = d.people.map(p => {
+    const m = byId(p.m);
+    return `<div class="pane">
+      <div class="person" style="box-shadow:none;background:transparent;padding:0 0 10px">
+        <span class="av">${ini(m.name)}</span>
+        <span><span class="pn">${esc(m.name)}</span><span class="pr2">${esc(m.role)}</span></span>
+      </div>
+      <div class="kan">${tasksOf(d, p.m).map(t => {
+        const s = taskSt(d, p.m, t);
+        return `<button class="task${s === "done" ? " done" : ""}" data-task="${d.id}|${p.m}|${t.id}">
+          <span class="st ${s}"></span><span class="tx">${esc(t.text)}</span><span class="stl">${ST_LABEL[s]}</span></button>`;
+      }).join("")}</div>
+      ${canTask(p.m) ? `<form class="addrow" data-addtask="${d.id}|${p.m}">
+          <input class="ainput" name="text" placeholder="Tambah tugas..." required>
+          <button class="btn sm" type="submit">+</button></form>` : ""}
+    </div>`;
+  }).join("");
+
+  return `<div class="modal-head"><div class="dots"></div>
+      <div style="position:relative">
+        <div class="kick">Divisi Kepengurusan 26/27</div>
+        <h2 style="margin:8px 0 6px">${esc(d.name)}</h2>
+        <div class="meta">${esc(d.tagline)}</div>
+      </div></div>
+    <div class="modal-body">
+      <div class="label">Tugas per Penanggung Jawab</div>
+      <div class="cols">${blocks}</div>
+    </div>`;
+}
+
+/* ---------------- view: FORESTY 26/27 ---------------- */
+function memberCard(m){
+  const n = PROGRAMS.filter(p => p.pics.includes(m.id)).length;
+  return `<button class="card click" data-open-member="${m.id}" style="text-align:center">
+      <span class="av-s" style="width:56px;height:56px;font-size:19px;margin:2px auto 12px;display:grid">${ini(m.name)}</span>
+      <div style="font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:13px;text-transform:uppercase">${esc(m.name)}</div>
+      <div class="meta" style="justify-content:center;margin-top:4px">${esc(m.role)}</div>
+      <div class="rule" style="margin:12px 0 9px"></div>
+      <div class="meta" style="justify-content:center">${esc(m.div)} · ${n} program</div>
+    </button>`;
+}
+
+function viewForesty(){
+  const seen = new Set();
+  const groups = DIVISIONS.map(d => {
+    const people = d.people.map(x => byId(x.m)).filter(Boolean);
+    people.forEach(m => seen.add(m.id));
+    return {name: d.name, people};
+  });
+  const rest = MEMBERS.filter(m => !seen.has(m.id));
+  if (rest.length) groups.push({name:"Anggota Lain", people:rest});
+
+  const sections = groups.filter(g => g.people.length).map(g => `
+    <section class="mgroup">
+      <div class="mgroup-h">
+        <h3>${esc(g.name)}</h3>
+        <span class="meta num">${String(g.people.length).padStart(2,"0")} orang</span>
+      </div>
+      <div class="grid g4">${g.people.map(memberCard).join("")}</div>
+    </section>`).join("");
+
+  return `<div class="sec-head"><div><div class="kick">Direktori Anggota</div><h1>Foresty 26/27</h1>
+      <p class="sec-sub">Seluruh pengurus, asisten laboratorium, dan tim riset periode 2026/2027, dikelompokkan per jabatan. Klik anggota untuk melihat profil dan program yang menjadi tanggung jawabnya.</p></div></div>
+    <div class="rule"></div>
+    <div class="advisor">
+      <svg class="fp" aria-hidden="true"><use href="#ic-fp"/></svg>
+      <span class="av-s adv">${ADVISOR.init}</span>
+      <div style="position:relative">
+        <div class="kick">Dosen Pembimbing</div>
+        <div class="advname">${esc(ADVISOR.name)}</div>
+        <div class="meta">${esc(ADVISOR.role)}</div>
+      </div>
+    </div>
+    <div class="label" style="margin:26px 0 18px">Pengurus, Aslab &amp; Tim Riset · ${MEMBERS.length} orang</div>
+    ${sections}`;
+}
+
+function modalMember(mid){
+  const m = byId(mid);
+  const mine = PROGRAMS.filter(p => p.pics.includes(mid));
+  const div = DIVISIONS.find(d => d.people.some(p => p.m === mid));
+  const myTasks = div ? tasksOf(div, mid) : [];
+
+  return `<div class="modal-head"><div class="dots"></div>
+      <div style="position:relative;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <span class="av-s" style="width:62px;height:62px;font-size:22px;display:grid;margin:0">${ini(m.name)}</span>
+        <div>
+          <div class="kick">Aslab · Foresty 26/27</div>
+          <h2 style="margin:6px 0 4px">${esc(m.name)}</h2>
+          <div class="meta">${esc(m.role)} · ${esc(m.div)}</div>
+        </div>
+      </div></div>
+    <div class="modal-body">
+      <div class="cols">
+        <div class="pane">
+          <div class="label" style="margin-bottom:8px">Profil</div>
+          <div class="kv"><span class="k">Nama</span><span>${esc(m.name)}</span></div>
+          <div class="kv"><span class="k">Jabatan</span><span>${esc(m.role)}</span></div>
+          <div class="kv"><span class="k">Divisi</span><span>${esc(m.div)}</span></div>
+          <div class="kv"><span class="k">Periode</span><span class="num">2026 / 2027</span></div>
+        </div>
+        <div class="pane">
+          <div class="label" style="margin-bottom:8px">Tugas Divisi</div>
+          ${myTasks.length ? `<div class="kan">${myTasks.map(t => {
+            const s = taskSt(div, mid, t);
+            return `<button class="task${s === "done" ? " done" : ""}" data-task="${div.id}|${mid}|${t.id}">
+              <span class="st ${s}"></span><span class="tx">${esc(t.text)}</span><span class="stl">${ST_LABEL[s]}</span></button>`;
+          }).join("")}</div>` : `<div class="meta">Belum ada tugas divisi tercatat.</div>`}
+          ${div && canTask(mid) ? `<form class="addrow" data-addtask="${div.id}|${mid}">
+              <input class="ainput" name="text" placeholder="Tambah tugas..." required>
+              <button class="btn sm" type="submit">+</button></form>` : ""}
+        </div>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:9px">Program yang Menjadi Tanggung Jawab (PIC)</div>
+        ${mine.length ? `<div class="stack">${mine.map(p => {
+          const pr = progress(p);
+          return `<button class="chk" data-open-prog="${p.id}" style="align-items:center">
+            <span style="flex:1">
+              <span class="t" style="font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600">${esc(p.title)}</span>
+              <span class="who">${fShort(dt(p.date))} · ${esc(p.place)} · checklist ${pr.done}/${pr.total}</span>
+            </span>
+            ${tag(p.status)}
+            <span style="color:var(--red);font-weight:700">&rsaquo;</span>
+          </button>`;
+        }).join("")}</div>` : `<div class="empty">Belum terdaftar sebagai PIC program mana pun.</div>`}
+      </div>
+    </div>`;
+}
+
+/* ---------------- view: NOTIFICATION ---------------- */
+function viewNotification(){
+  const ns = buildNotifs();
+  const rows = ns.map(n => {
+    const un = !STATE.read.includes(n.id);
+    return `<button class="nrow${un ? " unread" : ""}" data-notif="${n.id}" data-pid="${n.pid}">
+      <span class="ni"><svg viewBox="0 0 24 24">${n.kind === "task"
+        ? '<path d="M4 6h16M4 12h16M4 18h10"/>'
+        : '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'}</svg></span>
+      <span style="flex:1">
+        <span class="nt"><span class="trig${n.trig === "H-0" ? " h0" : ""}">${n.trig}</span>${n.text}</span>
+        <span class="nd">${fShort(n.fire)} · ${fTime(n.fire)} · ${un ? "belum dibaca" : "dibaca"}</span>
+      </span>
+    </button>`;
+  }).join("") || `<div class="empty">Belum ada notifikasi.</div>`;
+
+  return `<div class="sec-head" style="justify-content:space-between">
+      <div><div class="kick">Pengingat Otomatis</div><h1>Notification</h1>
+      <p class="sec-sub">Notifikasi dibangkitkan otomatis dari tanggal program dan tenggat checklist. Pemicu aktif: H-3, H-1, dan hari-H pukul 07.00.</p></div>
+      <button class="btn ghost" data-readall>Tandai semua dibaca</button>
+    </div>
+    <div class="rule"></div>
+    <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:20px">
+      <div class="pane"><div class="label">Aturan H-3</div><div class="meta" style="margin-top:5px">Pengingat awal persiapan program.</div></div>
+      <div class="pane" style="box-shadow:inset 0 0 0 1px var(--edge)"><div class="label" style="color:var(--red)">Aturan H-1 · wajib</div><div class="meta" style="margin-top:5px">“Rapat [nama] akan berlangsung besok, [tanggal] pukul [jam].”</div></div>
+      <div class="pane"><div class="label">Aturan H-0</div><div class="meta" style="margin-top:5px">Pengingat pagi di hari pelaksanaan.</div></div>
+      <div class="pane"><div class="label">Tenggat Checklist</div><div class="meta" style="margin-top:5px">H-1 sebelum tenggat, lalu status Overdue.</div></div>
+    </div>
+    <div class="stack">${rows}</div>`;
+}
+
+/* ---------------- view: INBOX ---------------- */
+function viewInbox(){
+  const rows = INBOX_SAMPLE.map(m => `<div class="mailrow">
+      <span class="av-s" style="margin:0">${ini(m.from)}</span>
+      <span style="min-width:0"><span class="sub">${esc(m.subject)}</span>
+        <span class="snip">${esc(m.from)} — ${esc(m.snippet)}</span></span>
+      <span class="meta num">${esc(m.t)}</span>
+    </div>`).join("");
+
+  return `<div class="sec-head" style="justify-content:space-between">
+      <div><div class="kick">Surel Resmi Laboratorium</div><h1>Inbox</h1>
+      <p class="sec-sub">Kotak masuk <b style="color:var(--red)">${LAB_EMAIL}</b>. Gmail tidak dapat ditanam langsung lewat iframe, sehingga halaman ini memakai pendekatan bertahap.</p></div>
+      <a class="btn" href="https://mail.google.com/mail/u/?authuser=${encodeURIComponent(LAB_EMAIL)}" target="_blank" rel="noopener">Buka Gmail &nearr;</a>
+    </div>
+    <div class="rule"></div>
+    <div class="cols" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span class="label">Pratinjau Kotak Masuk</span>
+          <span class="sample-flag">Tampilan contoh — bukan email asli</span>
+        </div>
+        <div class="stack">${rows}</div>
+      </div>
+      <div class="pane">
+        <div class="label" style="margin-bottom:10px">Rencana Integrasi</div>
+        <div class="note" style="margin-bottom:12px">
+          <b style="color:#fff">Tahap 1 — aktif sekarang.</b><br>
+          Tombol <b>Buka Gmail</b> mengarahkan ke <code>mail.google.com</code> pada akun lab. Tanpa setup, langsung pakai.
+        </div>
+        <div class="note">
+          <b style="color:#fff">Tahap 2 — Gmail API (OAuth2).</b><br>
+          Scope <code>gmail.readonly</code>, endpoint <code>users.messages.list</code> + <code>get</code> untuk menarik pengirim, subjek, cuplikan, dan waktu ke tampilan mini-inbox di atas. Refresh token disimpan di backend, bukan di browser.
+        </div>
+        <div class="label" style="margin:16px 0 8px">Catatan Keamanan</div>
+        <div class="meta">Jangan menyimpan kredensial Google di sisi klien. Semua panggilan Gmail API harus melalui backend lab dengan akun layanan atau token yang dienkripsi.</div>
+      </div>
+    </div>`;
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  $("#nav").innerHTML = visibleMenu().map(m => {
+    const c = m.id === "notification" ? unreadCount() : 0;
+    return `<button class="nav-item${route === m.id ? " active" : ""}" data-go="${m.id}" title="${m.label}">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${m.icon}</svg><span class="ntxt">${m.label}</span>
+      ${c ? `<span class="cnt num">${c}</span>` : ""}</button>`;
+  }).join("");
+  const u = unreadCount();
+  $("#bellCount").textContent = u;
+  $("#bellCount").hidden = !u;
+  const views = {dashboard:viewDashboard, programs:viewPrograms, division:viewDivision,
+                 foresty:viewForesty, notification:viewNotification, inbox:viewInbox,
+                 approval:viewApproval};
+  $("#view").innerHTML = (views[route] || viewDashboard)();
+  paintUser();
+  tickCountdowns();
+}
+
+/* ---------------- interaksi ---------------- */
+let CURRENT = null;
+function showModal(kind, id){
+  CURRENT = {kind, id};
+  closeModal();
+  openModal(kind === "prog" ? modalProgram(id) : kind === "div" ? modalDivision(id) : modalMember(id));
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-cal],[data-day],[data-notif],[data-readall]");
+  if (!t) return;
+  const d = t.dataset;
+
+  if (d.go) return go(d.go);
+  if (d.tab){ progTab = d.tab; return render(); }
+  if (d.openProg) return showModal("prog", d.openProg);
+  if (d.openDiv) return showModal("div", d.openDiv);
+  if (d.openMember) return showModal("member", d.openMember);
+  if (d.check){
+    const [pid, cid] = d.check.split("|");
+    if (!canCheck(pid, cid)) return toast("Hanya PIC item ini atau pengurus inti yang dapat mengubahnya.");
+    toggleCheck(pid, cid);
+    showModal("prog", pid);
+    return render0();
+  }
+  if (d.task){
+    const [did, mid, tid] = d.task.split("|");
+    if (!canTask(mid)) return toast("Kamu hanya dapat mengubah tugas atas namamu sendiri.");
+    cycleTask(did, mid, tid);
+    if (CURRENT && CURRENT.kind === "member") showModal("member", CURRENT.id);
+    else showModal("div", did);
+    return render0();
+  }
+  if (d.cal !== undefined){
+    if (d.cal === "0") { const n = new Date(); calCursor = new Date(n.getFullYear(), n.getMonth(), 1); }
+    else calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(d.cal), 1);
+    return render();
+  }
+  if (d.day){ calSel = calSel === d.day ? null : d.day; return render(); }
+  if (d.notif){
+    if (!STATE.read.includes(d.notif)){ STATE.read.push(d.notif); save(); }
+    render();
+    return showModal("prog", d.pid);
+  }
+  if (d.readall !== undefined){
+    STATE.read = Array.from(new Set([...STATE.read, ...buildNotifs().map(n => n.id)]));
+    save();
+    return render();
+  }
+});
+/* render ulang latar tanpa menutup modal */
+function render0(){
+  const keep = $("#modalRoot").innerHTML;
+  render();
+  $("#modalRoot").innerHTML = keep;
+  const root = $("#modalRoot");
+  if (keep){
+    root.querySelector(".scrim")?.addEventListener("click", ev => { if (ev.target.classList.contains("scrim")) closeModal(); });
+    root.querySelector("[data-close]")?.addEventListener("click", closeModal);
+  }
+  tickCountdowns();
+}
+
+/* pencarian */
+const qEl = $("#q"), resEl = $("#results");
+qEl.addEventListener("input", () => {
+  const v = qEl.value.trim().toLowerCase();
+  if (v.length < 2){ resEl.hidden = true; return; }
+  const hits = [
+    ...PROGRAMS.filter(p => p.title.toLowerCase().includes(v) || p.desc.toLowerCase().includes(v))
+      .map(p => ({k:"Program", n:p.title, a:`data-open-prog="${p.id}"`})),
+    ...MEMBERS.filter(m => m.name.toLowerCase().includes(v) || m.role.toLowerCase().includes(v))
+      .map(m => ({k:"Anggota", n:`${m.name} — ${m.role}`, a:`data-open-member="${m.id}"`})),
+    ...DIVISIONS.filter(x => x.name.toLowerCase().includes(v))
+      .map(x => ({k:"Divisi", n:x.name, a:`data-open-div="${x.id}"`})),
+  ].slice(0, 12);
+  resEl.innerHTML = hits.length
+    ? hits.map(h => `<button ${h.a}><span class="k">${h.k}</span><br>${esc(h.n)}</button>`).join("")
+    : `<div style="padding:12px;color:var(--dim);font-size:12px">Tidak ada hasil untuk “${esc(qEl.value)}”.</div>`;
+  resEl.hidden = false;
+});
+document.addEventListener("click", e => { if (!e.target.closest(".search")) resEl.hidden = true; });
+
+$("#bell").addEventListener("click", () => go("notification"));
+$("#hamb").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
+
+const RKEY = "foresty2627.rail";
+const railBtn = $("#rail"), shellEl = $("#shell");
+function setRail(on){
+  shellEl.classList.toggle("rail", on);
+  railBtn.setAttribute("aria-expanded", String(!on));
+  railBtn.setAttribute("aria-label", on ? "Tampilkan menu" : "Sembunyikan menu");
+  railBtn.title = on ? "Tampilkan menu" : "Sembunyikan menu";
+  try { localStorage.setItem(RKEY, on ? "1" : "0"); } catch(e){}
+}
+railBtn.addEventListener("click", () => setRail(!shellEl.classList.contains("rail")));
+try { if (localStorage.getItem(RKEY) === "1") setRail(true); } catch(e){}
+
+setInterval(() => { const c = $("#clock"); if (c) c.textContent = fTime(new Date()); }, 1000);
+
+function boot(){
+  route = (location.hash.replace("#","") || "dashboard");
+  if (!visibleMenu().some(m => m.id === route)) route = "dashboard";
+  render();
+}
+</script>
+<script>
+/* ============================================================
+   AUTENTIKASI (PROTOTIPE — data disimpan di browser, bukan server)
+   Alur: daftar -> pilih nama -> menunggu ACC akun lab -> aktif.
+   Password di sini adalah password AKUN WEB, bukan password Gmail.
+   ============================================================ */
+
+const LAB_EMAIL_ACC = "forestylab@gmail.com";
+const LAB_PASS_DEMO = "foresty2627";           // hanya untuk prototipe
+
+/* Pengurus inti + koordinator divisi: akses penuh.
+   Sisanya (staff & tim riset): hanya item atas namanya sendiri. */
+const INTI_IDS = ["m01","m02","m03","m04","m05","m10","m15","m20"];
+const levelOf = id => INTI_IDS.includes(id) ? "inti" : "staff";
+const LEVEL_LABEL = {lab:"Akun Lab · Admin", inti:"Akses Penuh", staff:"Akses Terbatas"};
+
+const AKEY = "foresty2627.auth.v1";
+let AUTH = {accounts: [], session: null};
+try { const r = localStorage.getItem(AKEY); if (r) AUTH = Object.assign(AUTH, JSON.parse(r)); } catch(e){}
+function saveAuth(){ try { localStorage.setItem(AKEY, JSON.stringify(AUTH)); } catch(e){} }
+
+const acctByEmail = e => AUTH.accounts.find(a => a.email.toLowerCase() === String(e).toLowerCase());
+const approvedFor = mid => AUTH.accounts.find(a => a.memberId === mid && a.status === "approved");
+const pendingList = () => AUTH.accounts.filter(a => a.status === "pending");
+const activeList  = () => AUTH.accounts.filter(a => a.status === "approved");
+
+function session(){
+  if (!AUTH.session) return null;
+  if (AUTH.session.kind === "lab") return {kind:"lab", member:null, level:"lab"};
+  const a = acctByEmail(AUTH.session.email);
+  if (!a || a.status !== "approved") return null;
+  return {kind:"member", account:a, member: byId(a.memberId), level: levelOf(a.memberId)};
+}
+const isLab  = () => session()?.kind === "lab";
+const myId   = () => session()?.member?.id || null;
+const canAll = () => { const s = session(); return !!s && (s.kind === "lab" || s.level === "inti"); };
+const canCheck = (pid, cid) => {
+  if (canAll()) return true;
+  const c = checksOf(prog(pid)).find(x => x.id === cid);
+  return !!c && c.who === myId();
+};
+const canTask = mid => canAll() || mid === myId();
+
+/* ---- gabungan data bawaan + item yang ditambahkan pengguna ---- */
+function checksOf(p){ return p.checklist.concat(STATE.extraChecks?.[p.id] || []); }
+function tasksOf(d, mid){
+  const base = d.people.find(x => x.m === mid)?.tasks || [];
+  return base.concat(STATE.extraTasks?.[`${d.id}.${mid}`] || []);
+}
+function addCheck(pid, text, who){
+  STATE.extraChecks = STATE.extraChecks || {};
+  (STATE.extraChecks[pid] = STATE.extraChecks[pid] || []).push({id:"x" + Date.now(), text, who});
+  save();
+}
+function addTask(did, mid, text){
+  STATE.extraTasks = STATE.extraTasks || {};
+  (STATE.extraTasks[`${did}.${mid}`] = STATE.extraTasks[`${did}.${mid}`] || []).push({id:"x" + Date.now(), text, st:"todo"});
+  save();
+}
+
+/* ---------------- menu & identitas ---------------- */
+function visibleMenu(){
+  return isLab() ? MENU.concat([{id:"approval", label:"Approval",
+    icon:'<path d="M4 12l5 5L20 6"/><path d="M4 5h9"/>'}]) : MENU;
+}
+function paintUser(){
+  const s = session(), el = $("#me");
+  if (!el || !s) return;
+  const nama = s.kind === "lab" ? "Akun Lab" : s.member.name;
+  const sub  = s.kind === "lab" ? "Administrator" : s.member.role;
+  const inis = s.kind === "lab" ? "FL" : ini(s.member.name);
+  const pend = isLab() ? pendingList().length : 0;
+  el.innerHTML = `<div class="av">${inis}</div>
+    <div>
+      <div class="mn">${esc(nama)}</div>
+      <div class="mr">${esc(sub)}</div>
+    </div>
+    ${pend ? `<span class="tag t-over" style="margin-left:4px">${pend} menunggu</span>` : ""}
+    <button class="logout" id="logout" title="Keluar" aria-label="Keluar">
+      <svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>
+    </button>`;
+  $("#logout").addEventListener("click", () => { AUTH.session = null; saveAuth(); gate(); });
+}
+
+/* ---------------- toast ---------------- */
+let toastT;
+function toast(msg){
+  let el = $("#toast");
+  if (!el){ el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 2600);
+}
+
+/* ---------------- layar autentikasi ---------------- */
+let authScreen = "login", authErr = "", authNotice = "";
+
+function authShell(inner){
+  return `<div class="authwrap">
+    <div class="authbox">
+      <div class="dots"></div><div class="scan"></div>
+      <div class="authhead">
+        <img src="logo.png" alt="Logo Foresty Laboratory" width="46" height="65">
+        <div>
+          <div class="bt" style="font-family:var(--disp);font-weight:700;letter-spacing:.13em;font-size:15px;line-height:1.15">FORESTY<br>LABORATORY</div>
+          <div class="bs" style="font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase">Forensics &amp; Security</div>
+        </div>
+      </div>
+      <span class="labshow" style="margin:0 0 18px">FORESTY MANAGEMENT</span>
+      ${inner}
+    </div>
+  </div>`;
+}
+
+function viewLogin(){
+  const claimable = MEMBERS.filter(m => !approvedFor(m.id)).length;
+  return authShell(`
+    <h2 style="margin-bottom:4px">Masuk</h2>
+    <p class="meta" style="margin-bottom:18px">Gunakan email yang sudah disetujui akun lab.</p>
+    ${authNotice ? `<div class="anotice">${authNotice}</div>` : ""}
+    ${authErr ? `<div class="aerr">${esc(authErr)}</div>` : ""}
+    <form class="aform" id="loginForm">
+      <label class="afield"><span class="label">Email</span>
+        <input id="li-email" type="email" autocomplete="username" placeholder="nama@email.com" required></label>
+      <label class="afield"><span class="label">Password akun web</span>
+        <input id="li-pass" type="password" autocomplete="current-password" placeholder="••••••••" required></label>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Masuk</button>
+    </form>
+    <div class="aalt">Belum punya akun? <button data-auth="register">Daftar di sini</button>
+      <span class="meta" style="display:block;margin-top:5px">${claimable} nama masih tersedia untuk diklaim.</span></div>
+    <div class="ahint"><b>Prototipe:</b> akun lab <code>${LAB_EMAIL_ACC}</code> · password <code>${LAB_PASS_DEMO}</code>. Ganti saat backend asli dipasang.</div>`);
+}
+
+function viewRegister(){
+  const opts = MEMBERS.filter(m => !approvedFor(m.id)).map(m => {
+    const waiting = pendingList().filter(a => a.memberId === m.id).length;
+    return `<option value="${m.id}">${esc(m.name)} — ${esc(m.role)}${waiting ? ` (${waiting} menunggu ACC)` : ""}</option>`;
+  }).join("");
+  return authShell(`
+    <h2 style="margin-bottom:4px">Daftar Akun</h2>
+    <p class="meta" style="margin-bottom:18px">Daftarkan email, lalu pilih namamu dari daftar pengurus supaya akun ini menempel ke datamu.</p>
+    ${authErr ? `<div class="aerr">${esc(authErr)}</div>` : ""}
+    <form class="aform" id="regForm">
+      <label class="afield"><span class="label">Email</span>
+        <input id="rg-email" type="email" autocomplete="username" placeholder="nama@email.com" required></label>
+      <label class="afield"><span class="label">Password akun web</span>
+        <input id="rg-pass" type="password" autocomplete="new-password" placeholder="minimal 8 karakter" required></label>
+      <label class="afield"><span class="label">Ulangi password</span>
+        <input id="rg-pass2" type="password" autocomplete="new-password" placeholder="••••••••" required></label>
+      <label class="afield"><span class="label">Nama kamu</span>
+        <select id="rg-member" required><option value="">— pilih nama —</option>${opts}</select></label>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Kirim Pendaftaran</button>
+    </form>
+    <div class="ahint"><b>Password ini password akun web Foresty Management</b>, bukan password Gmail kamu. Jangan pernah memasukkan password Gmail di halaman mana pun.</div>
+    <div class="aalt">Sudah punya akun? <button data-auth="login">Masuk</button></div>`);
+}
+
+function viewPending(email){
+  const a = acctByEmail(email), m = byId(a.memberId);
+  return authShell(`
+    <div class="await-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+    <h2 style="margin-bottom:4px">Menunggu Persetujuan</h2>
+    <p class="meta" style="margin-bottom:18px">Pendaftaran sudah terkirim. Akun lab perlu menyetujui dulu sebelum kamu bisa masuk.</p>
+    <div class="pane" style="margin-bottom:16px">
+      <div class="kv"><span class="k">Email</span><span>${esc(a.email)}</span></div>
+      <div class="kv"><span class="k">Nama</span><span>${esc(m.name)}</span></div>
+      <div class="kv"><span class="k">Jabatan</span><span>${esc(m.role)}</span></div>
+      <div class="kv"><span class="k">Dikirim</span><span class="num">${fShort(dt(a.at))} ${fTime(dt(a.at))}</span></div>
+      <div class="kv"><span class="k">Status</span><span style="color:var(--warn)">Menunggu ACC ${LAB_EMAIL_ACC}</span></div>
+    </div>
+    <button class="btn ghost" data-auth="login" style="width:100%;justify-content:center">Kembali ke halaman masuk</button>`);
+}
+
+function viewRejected(email){
+  const a = acctByEmail(email), m = byId(a.memberId);
+  return authShell(`
+    <div class="await-ic rej"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
+    <h2 style="margin-bottom:4px">Pendaftaran Ditolak</h2>
+    <p class="meta" style="margin-bottom:16px">Akun lab menolak pendaftaran email <b style="color:#fff">${esc(a.email)}</b> atas nama ${esc(m.name)}.</p>
+    ${a.reason ? `<div class="anotice" style="border-left-color:var(--red)"><b>Alasan:</b> ${esc(a.reason)}</div>` : ""}
+    <button class="btn" data-auth="reset|${esc(a.email)}" style="width:100%;justify-content:center;margin-top:6px">Daftar ulang</button>
+    <button class="btn ghost" data-auth="login" style="width:100%;justify-content:center;margin-top:8px">Kembali</button>`);
+}
+
+/* ---------------- menu Approval (khusus akun lab) ---------------- */
+function viewApproval(){
+  if (!isLab()) return `<div class="empty">Halaman ini hanya untuk akun lab.</div>`;
+  const pend = pendingList();
+  const dupes = {};
+  pend.forEach(a => dupes[a.memberId] = (dupes[a.memberId] || 0) + 1);
+
+  const queue = pend.map(a => {
+    const m = byId(a.memberId), bentrok = dupes[a.memberId] > 1;
+    return `<div class="card" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1;min-width:210px">
+        ${bentrok ? `<span class="tag t-over" style="margin-bottom:8px">${dupes[a.memberId]} orang mengklaim nama ini</span>` : ""}
+        <div class="kv"><span class="k">Email</span><span>${esc(a.email)}</span></div>
+        <div class="kv"><span class="k">Mengaku</span><span style="color:#fff">${esc(m.name)}</span></div>
+        <div class="kv"><span class="k">Jabatan</span><span>${esc(m.role)} · ${esc(m.div)}</span></div>
+        <div class="kv"><span class="k">Dikirim</span><span class="num">${fShort(dt(a.at))} ${fTime(dt(a.at))}</span></div>
+      </div>
+      <div style="flex:0 0 240px;display:flex;flex-direction:column;gap:8px">
+        <input class="ainput" id="rsn-${esc(a.email)}" placeholder="Alasan penolakan (opsional)">
+        <div style="display:flex;gap:8px">
+          <button class="btn sm" data-appr="ok|${esc(a.email)}" style="flex:1;justify-content:center">Setujui</button>
+          <button class="btn ghost sm" data-appr="no|${esc(a.email)}" style="flex:1;justify-content:center">Tolak</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("") || `<div class="empty">Tidak ada pendaftaran yang menunggu.</div>`;
+
+  const active = activeList().map(a => {
+    const m = byId(a.memberId);
+    return `<div class="mailrow" style="grid-template-columns:30px minmax(0,1fr) auto auto;gap:12px;align-items:center">
+      <span class="av-s" style="margin:0">${ini(m.name)}</span>
+      <span style="min-width:0"><span class="sub">${esc(m.name)}</span><span class="snip">${esc(a.email)}</span></span>
+      <span class="tag ${levelOf(m.id) === "inti" ? "t-ongoing" : "t-soon"}">${LEVEL_LABEL[levelOf(m.id)]}</span>
+      <button class="btn ghost sm" data-appr="cabut|${esc(a.email)}">Cabut</button>
+    </div>`;
+  }).join("") || `<div class="empty">Belum ada akun aktif.</div>`;
+
+  const belum = MEMBERS.filter(m => !approvedFor(m.id));
+
+  return `<div class="sec-head"><div><div class="kick">Khusus ${LAB_EMAIL_ACC}</div><h1>Approval</h1>
+      <p class="sec-sub">Setujui atau tolak pendaftaran akun. Email baru resmi menempel ke nama pengurus setelah disetujui di sini.</p></div></div>
+    <div class="rule"></div>
+    <div class="grid g-sum" style="margin-bottom:24px">
+      ${stat("Menunggu Persetujuan", pend.length, pend.length ? "red" : "", "pendaftaran masuk")}
+      ${stat("Akun Aktif", activeList().length, "ok", "sudah bisa login")}
+      ${stat("Nama Belum Diklaim", belum.length, "", "dari " + MEMBERS.length + " pengurus")}
+    </div>
+    <div class="label" style="margin-bottom:12px">Antrean Pendaftaran</div>
+    <div class="stack" style="gap:12px;margin-bottom:30px">${queue}</div>
+    <div class="label" style="margin-bottom:12px">Akun Aktif</div>
+    <div class="stack">${active}</div>`;
+}
+
+/* ---------------- gate ---------------- */
+function gate(){
+  const s = session(), root = $("#authRoot"), shell = $("#shell");
+  if (s){
+    root.innerHTML = ""; root.hidden = true;
+    shell.hidden = false;
+    if (route === "approval" && !isLab()) route = "dashboard";
+    boot(); paintUser();
+    return;
+  }
+  shell.hidden = true; root.hidden = false;
+  const v = authScreen;
+  root.innerHTML = v === "register" ? viewRegister()
+    : v.startsWith("pending:")  ? viewPending(v.slice(8))
+    : v.startsWith("rejected:") ? viewRejected(v.slice(9))
+    : viewLogin();
+  authErr = ""; authNotice = "";
+  wireAuthForms();
+}
+
+function wireAuthForms(){
+  const lf = $("#loginForm");
+  if (lf) lf.addEventListener("submit", e => {
+    e.preventDefault();
+    const email = $("#li-email").value.trim(), pass = $("#li-pass").value;
+    if (email.toLowerCase() === LAB_EMAIL_ACC && pass === LAB_PASS_DEMO){
+      AUTH.session = {kind:"lab"}; saveAuth(); route = "approval"; return gate();
+    }
+    const a = acctByEmail(email);
+    if (!a || a.pass !== pass){ authErr = "Email atau password tidak cocok."; authScreen = "login"; return gate(); }
+    if (a.status === "pending"){ authScreen = "pending:" + a.email; return gate(); }
+    if (a.status === "rejected"){ authScreen = "rejected:" + a.email; return gate(); }
+    AUTH.session = {kind:"member", email:a.email}; saveAuth(); route = "dashboard"; gate();
+  });
+
+  const rf = $("#regForm");
+  if (rf) rf.addEventListener("submit", e => {
+    e.preventDefault();
+    const email = $("#rg-email").value.trim(), p1 = $("#rg-pass").value, p2 = $("#rg-pass2").value;
+    const mid = $("#rg-member").value;
+    authScreen = "register";
+    if (email.toLowerCase() === LAB_EMAIL_ACC){ authErr = "Email ini dipakai akun lab dan tidak bisa didaftarkan."; return gate(); }
+    if (acctByEmail(email)){ authErr = "Email ini sudah pernah didaftarkan."; return gate(); }
+    if (p1.length < 8){ authErr = "Password minimal 8 karakter."; return gate(); }
+    if (p1 !== p2){ authErr = "Ulangi password belum sama."; return gate(); }
+    if (!mid){ authErr = "Pilih dulu namamu dari daftar."; return gate(); }
+    AUTH.accounts.push({email, pass:p1, memberId:mid, status:"pending", at:new Date().toISOString()});
+    saveAuth();
+    authScreen = "pending:" + email; gate();
+  });
+}
+
+/* klik pada layar auth + menu approval */
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-auth],[data-appr]");
+  if (!t) return;
+  if (t.dataset.auth){
+    const [act, arg] = t.dataset.auth.split("|");
+    if (act === "reset"){ AUTH.accounts = AUTH.accounts.filter(a => a.email !== arg); saveAuth(); authScreen = "register"; }
+    else authScreen = act;
+    return gate();
+  }
+  const [act, email] = t.dataset.appr.split("|");
+  const a = acctByEmail(email);
+  if (!a) return;
+  if (act === "ok"){ a.status = "approved"; delete a.reason; toast(`${byId(a.memberId).name} disetujui — akun ${a.email} aktif.`); }
+  if (act === "no"){
+    const r = document.getElementById("rsn-" + email);
+    a.status = "rejected"; a.reason = r && r.value.trim() ? r.value.trim() : "";
+    toast(`Pendaftaran ${a.email} ditolak.`);
+  }
+  if (act === "cabut"){
+    AUTH.accounts = AUTH.accounts.filter(x => x.email !== email);
+    toast(`Akses ${email} dicabut. Namanya bisa diklaim lagi.`);
+  }
+  saveAuth(); render(); paintUser();
+});
+
+/* form tambah item / tugas */
+document.addEventListener("submit", e => {
+  const f = e.target;
+  if (f.dataset.addcheck){
+    e.preventDefault();
+    const pid = f.dataset.addcheck, txt = f.text.value.trim();
+    if (!txt) return;
+    addCheck(pid, txt, f.who.value);
+    showModal("prog", pid); render0();
+    toast("Item checklist ditambahkan.");
+  }
+  if (f.dataset.addtask){
+    e.preventDefault();
+    const [did, mid] = f.dataset.addtask.split("|"), txt = f.text.value.trim();
+    if (!txt) return;
+    if (!canTask(mid)) return toast("Kamu hanya dapat menambah tugas atas namamu sendiri.");
+    addTask(did, mid, txt);
+    if (CURRENT && CURRENT.kind === "member") showModal("member", CURRENT.id); else showModal("div", did);
+    render0();
+    toast("Tugas ditambahkan.");
+  }
+});
+
+gate();
+</script>

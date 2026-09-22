@@ -78,8 +78,7 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 #shell.rail .brand{padding:18px 0;justify-content:center;gap:0}
 #shell.rail .btxt{display:none}
 #shell.rail .labshow{display:none}
-#shell.rail nav{border-top:1px solid var(--line);margin-top:0}
-#shell.rail nav{padding:10px 0}
+#shell.rail nav{padding:10px 0;margin-top:0;border-top:1px solid var(--line)}
 #shell.rail .nav-item{justify-content:center;padding:12px 0;gap:0;border-left-width:0;border-right:2px solid transparent}
 #shell.rail .nav-item.active{border-right-color:var(--red);background:rgba(228,24,26,.16)}
 #shell.rail .ntxt{display:none}
@@ -276,14 +275,14 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
   background:#1a0505;color:#ff5b5c;box-shadow:inset 0 0 0 1px var(--edge);clip-path:var(--cut-tag);margin-right:7px}
 .trig.h0{background:var(--red);color:#fff;box-shadow:none}
 .mailrow{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:12px;padding:12px 14px;
-  background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);align-items:start}
-.mailrow .sub{font-size:12.5px;font-weight:500}
-.mailrow .snip{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);align-items:center;transition:.14s}
+.mailrow>*{min-width:0}
+.mailrow .sub{display:block;font-size:12.5px;font-weight:500;line-height:1.45;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mailrow .snip{display:block;margin-top:3px;font-size:11.5px;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .note{background:#0d0d0d;box-shadow:inset 0 0 0 1px var(--line);border-left:2px solid var(--red);padding:14px 16px;font-size:12px;color:var(--muted)}
 .note code{background:#1a0505;color:#ff7a7b;padding:1px 5px;font-size:11px}
-.sample-flag{display:inline-flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--warn);font-family:var(--disp);font-weight:600}
-.sample-flag::before{content:"";width:6px;height:6px;background:var(--warn)}
 
 .mgroup{margin-bottom:34px}
 .mgroup:last-child{margin-bottom:0}
@@ -380,5 +379,59 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 .chk.locked:hover,.task.locked:hover{box-shadow:inset 0 0 0 1px #1d1d1d}
 .chk.locked .box{box-shadow:inset 0 0 0 1px #333}
 #toast.bad{box-shadow:inset 0 0 0 1px var(--red),0 0 22px rgba(228,24,26,.4);background:#1d0404}
-.authwrap{display:none}
-#authRoot:not([hidden]) .authwrap{display:flex}
+
+/* ---------- kartu akun email ---------- */
+.mailbox{position:relative;overflow:hidden;display:flex;gap:20px;flex-wrap:wrap;align-items:center;
+  justify-content:space-between;padding:20px 22px;
+  background:linear-gradient(100deg,#150404,#0a0a0a 68%);box-shadow:inset 0 0 0 1px var(--edge)}
+.mailbox .dots{position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(228,24,26,.5) 1px,transparent 1.1px);background-size:9px 9px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 58%,#000);mask-image:linear-gradient(90deg,transparent 58%,#000);opacity:.4}
+.mailbox .fp{position:absolute;right:170px;top:-34px;width:150px;opacity:.08;pointer-events:none}
+.mailaddr{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.04em;margin:7px 0 5px;word-break:break-all}
+.linkish{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-family:var(--disp);
+  font-weight:600;color:var(--dim);text-decoration:underline;text-underline-offset:3px}
+.linkish:hover{color:var(--red)}
+.pane code{background:#1a0505;color:#ff7a7b;padding:1px 5px;font-size:11px}
+@media (max-width:620px){.mailbox .fp{display:none}}
+
+/* ---------- daftar email ---------- */
+a.mailrow,a.nrow{text-decoration:none;color:var(--fg)}
+a.mailrow:hover{box-shadow:inset 0 0 0 1px var(--edge);background:var(--surface2)}
+.mailrow.unread{background:linear-gradient(90deg,rgba(228,24,26,.1),var(--surface) 46%);
+  box-shadow:inset 0 0 0 1px var(--edge)}
+.mailrow.unread .sub{color:#fff;font-weight:700}
+.mailrow .sub .dot{margin-right:7px;vertical-align:1px}
+.btn[disabled]{opacity:.55;pointer-events:none}
+
+/* ---------- tanggung jawab program di dalam detail divisi ---------- */
+.duty{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:4px 11px 4px 8px;font-size:10px;font-family:var(--disp);font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;background:rgba(228,24,26,.14);color:#ff7a7b;
+  box-shadow:inset 0 0 0 1px var(--edge);clip-path:var(--cut-tag);transition:.14s;text-align:left}
+.chip:hover{background:var(--red);color:#fff;box-shadow:none}
+.duty .task .who{font-size:10px;color:var(--dim);margin-top:3px}
+
+/* ---------- form program ---------- */
+.picgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;
+  max-height:220px;overflow-y:auto;padding:9px;background:#0b0b0b;box-shadow:inset 0 0 0 1px var(--line)}
+.picopt{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;cursor:pointer;transition:.12s}
+.picopt:hover{background:rgba(228,24,26,.08)}
+/* kotak centang jangan ikut aturan kotak isian (.afield input) yang melebar penuh */
+.afield input[type="checkbox"],.picopt input[type="checkbox"]{
+  -webkit-appearance:checkbox;appearance:checkbox;
+  flex:0 0 15px;width:15px;height:15px;min-width:15px;
+  margin:2px 0 0;padding:0;background:none;box-shadow:none;accent-color:var(--red);cursor:pointer}
+.picopt>span{min-width:0;flex:1}
+.picopt b{display:block;font-size:11.5px;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
+.picopt i{display:block;font-size:9.5px;font-style:normal;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
+textarea.ainput{resize:vertical;line-height:1.55}
+.modal-body .cols{align-items:start}
+
+/* ---------- notulen rapat ---------- */
+.notulen{white-space:pre-wrap;font-size:12.5px;line-height:1.75;color:var(--fg);
+  background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);padding:16px;
+  overflow-wrap:anywhere}
+.notulen-edit{min-height:220px;resize:vertical;line-height:1.75;font-size:12.5px}

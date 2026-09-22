@@ -884,7 +884,11 @@ const MENU = [
   {id:"division",     label:"Division",     icon:'<circle cx="12" cy="7" r="3"/><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M12 10v4M7 15l4-2M17 15l-4-2"/>'},
   {id:"foresty",      label:"Foresty 26/27",icon:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 7h5M16 11h5M16 15h3"/>'},
   {id:"notification", label:"Notification", icon:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'},
-  {id:"inbox",        label:"Inbox",        icon:'<path d="M3 5h18v14H3z"/><path d="M3 6l9 7 9-7"/>'},
+];
+/* Inbox & Approval hanya untuk akun lab */
+const LAB_MENU = [
+  {id:"inbox",    label:"Inbox",    icon:'<path d="M3 5h18v14H3z"/><path d="M3 6l9 7 9-7"/>'},
+  {id:"approval", label:"Approval", icon:'<path d="M4 12l5 5L20 6"/><path d="M4 5h9"/>'},
 ];
 let route = "dashboard";
 function go(r){ route = r; location.hash = r; render(); window.scrollTo({top:0}); $("#sidebar").classList.remove("open"); }
@@ -1289,7 +1293,12 @@ function viewNotification(){
 }
 
 /* ---------------- view: INBOX ---------------- */
+function gmailLink(after){
+  return "https://accounts.google.com/AccountChooser?Email=" + encodeURIComponent(LAB_EMAIL) +
+         "&continue=" + encodeURIComponent("https://mail.google.com/mail/u/0/" + (after || "#inbox"));
+}
 function viewInbox(){
+  if (!isLab()) return `<div class="empty">Halaman ini hanya untuk akun lab.</div>`;
   const rows = INBOX_SAMPLE.map(m => `<div class="mailrow">
       <span class="av-s" style="margin:0">${ini(m.from)}</span>
       <span style="min-width:0"><span class="sub">${esc(m.subject)}</span>
@@ -1300,7 +1309,10 @@ function viewInbox(){
   return `<div class="sec-head" style="justify-content:space-between">
       <div><div class="kick">Surel Resmi Laboratorium</div><h1>Inbox</h1>
       <p class="sec-sub">Kotak masuk <b style="color:var(--red)">${LAB_EMAIL}</b>. Gmail tidak dapat ditanam langsung lewat iframe, sehingga halaman ini memakai pendekatan bertahap.</p></div>
-      <a class="btn" href="https://mail.google.com/mail/u/?authuser=${encodeURIComponent(LAB_EMAIL)}" target="_blank" rel="noopener">Buka Gmail &nearr;</a>
+      <span style="display:flex;gap:9px;flex-wrap:wrap">
+        <a class="btn" href="${gmailLink("#inbox")}" target="_blank" rel="noopener">Buka Kotak Masuk &nearr;</a>
+        <a class="btn ghost" href="${gmailLink("#inbox?compose=new")}" target="_blank" rel="noopener">Tulis Email &nearr;</a>
+      </span>
     </div>
     <div class="rule"></div>
     <div class="cols" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start">
@@ -1315,7 +1327,7 @@ function viewInbox(){
         <div class="label" style="margin-bottom:10px">Rencana Integrasi</div>
         <div class="note" style="margin-bottom:12px">
           <b style="color:#fff">Tahap 1 — aktif sekarang.</b><br>
-          Tombol <b>Buka Gmail</b> mengarahkan ke <code>mail.google.com</code> pada akun lab. Tanpa setup, langsung pakai.
+          Tombol di atas membuka Gmail lewat pemilih akun Google dengan alamat lab sudah terisi, jadi tetap mendarat di kotak masuk lab walau browser sedang login beberapa akun Google.
         </div>
         <div class="note">
           <b style="color:#fff">Tahap 2 — Gmail API (OAuth2).</b><br>
@@ -1512,10 +1524,7 @@ function addTask(did, mid, text){
 }
 
 /* ---------------- menu & identitas ---------------- */
-function visibleMenu(){
-  return isLab() ? MENU.concat([{id:"approval", label:"Approval",
-    icon:'<path d="M4 12l5 5L20 6"/><path d="M4 5h9"/>'}]) : MENU;
-}
+function visibleMenu(){ return isLab() ? MENU.concat(LAB_MENU) : MENU; }
 function paintUser(){
   const s = session(), el = $("#me");
   if (!el || !s) return;
@@ -1693,7 +1702,7 @@ function gate(){
   if (s){
     root.innerHTML = ""; root.hidden = true;
     shell.hidden = false;
-    if (route === "approval" && !isLab()) route = "dashboard";
+    if ((route === "approval" || route === "inbox") && !isLab()) route = "dashboard";
     boot(); paintUser();
     return;
   }

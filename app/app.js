@@ -1428,7 +1428,7 @@ function paintUser() {
   const inis = ME.isLab ? "FL" : ini(ME.member.name);
   const pend = isLab() ? PENDING.length : 0;
   el.innerHTML = `<div class="av">${inis}</div>
-    <div>
+    <div class="mtxt">
       <div class="mn">${esc(nama)}</div>
       <div class="mr">${esc(sub)}</div>
     </div>

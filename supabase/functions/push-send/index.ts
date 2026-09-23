@@ -83,6 +83,11 @@ Deno.serve(async (req) => {
 
   const now = Date.now();
 
+  /* Trigger database mengirim {event, id, op} untuk pemberitahuan seketika.
+     Cron mengirim body kosong, dan itu menjalankan jalur pengingat H-x. */
+  let evt: { event?: string; id?: string; op?: string } = {};
+  try { evt = await req.json(); } catch (_) { evt = {}; }
+
   try {
     /* ---------------- data ---------------- */
     const [programs, checklist, meetings, members, profiles, subs, log] = await Promise.all([
@@ -103,6 +108,33 @@ Deno.serve(async (req) => {
     /* ---------------- pengingat yang jatuh tempo ---------------- */
     const jobs: Job[] = [];
     const RULES = [{ d: 3, l: "H-3" }, { d: 1, l: "H-1" }, { d: 0, l: "H-0" }];
+
+    /* --- jalur seketika: dipanggil trigger saat data baru disimpan --- */
+    if (evt.event === "meeting" && evt.id) {
+      const mt = meetings.find((m: any) => m.id === evt.id);
+      if (mt) {
+        const when = new Date(mt.held_at);
+        jobs.push({
+          key: `mtg:${mt.id}:live:${now}`,
+          title: evt.op === "UPDATE" ? `Meeting rescheduled · ${mt.title}` : `New meeting · ${mt.title}`,
+          body: `${fDate(when)} at ${fTime(when)}${mt.place ? `, ${mt.place}` : ""}.`,
+          url: "./#minutes", room: mt.room,
+        });
+      }
+    } else if (evt.event === "program" && evt.id) {
+      const p = programs.find((x: any) => x.id === evt.id);
+      if (p) {
+        const when = new Date(p.starts_at);
+        jobs.push({
+          key: `prog:${p.id}:live:${now}`,
+          title: evt.op === "UPDATE" ? `Program updated · ${p.title}` : `New program · ${p.title}`,
+          body: `${fDate(when)} at ${fTime(when)}${p.place ? `, ${p.place}` : ""}.`,
+          url: "./#programs",
+        });
+      }
+    }
+
+    if (jobs.length) return await deliver(jobs, { subs, profiles, memberById, skipLog: true });
 
     for (const p of programs) {
       if (p.status === "completed") continue;
@@ -155,8 +187,23 @@ Deno.serve(async (req) => {
     }
 
     if (!jobs.length) return new Response(JSON.stringify({ sent: 0, jobs: 0 }));
+    return await deliver(jobs, { subs, profiles, memberById, skipLog: false });
+  } catch (e: any) {
+    console.error(e);
+    return new Response(JSON.stringify({ error: String(e?.message ?? e) }), { status: 500 });
+  }
+});
 
-    /* ---------------- siapa menerima apa ---------------- */
+/* ===================================================================
+   Menentukan siapa berhak menerima tiap pengingat, lalu mengirimkannya.
+   =================================================================== */
+async function deliver(
+  jobs: Job[],
+  ctx: { subs: any[]; profiles: any[]; memberById: Map<string, any>; skipLog: boolean },
+) {
+  const { subs, profiles, memberById, skipLog } = ctx;
+
+  try {
     let labUser: string | null = null;
     try {
       const r = await fetch(`${SUPA}/rest/v1/rpc/lab_user_id`, { method: "POST", headers: hdr, body: "{}" });
@@ -209,7 +256,9 @@ Deno.serve(async (req) => {
       if (any) done.push(job.key);
     }
 
-    if (done.length) {
+    /* Pemberitahuan seketika tidak dicatat: pemicunya kejadian di database,
+       bukan waktu, jadi tidak mungkin terkirim dua kali. */
+    if (done.length && !skipLog) {
       await api("push_log", {
         method: "POST",
         headers: { Prefer: "resolution=ignore-duplicates" },
@@ -224,4 +273,4 @@ Deno.serve(async (req) => {
     console.error(e);
     return new Response(JSON.stringify({ error: String(e?.message ?? e) }), { status: 500 });
   }
-});
+}

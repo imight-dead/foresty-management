@@ -470,7 +470,11 @@ const LAB_MENU = [
 const visibleMenu = () => isLab() ? MENU.concat(LAB_MENU) : MENU;
 
 let route = "dashboard";
-function go(r) { route = r; location.hash = r; render(); window.scrollTo({ top: 0 }); $("#sidebar").classList.remove("open"); }
+function go(r) {
+  route = r; location.hash = r; render(); window.scrollTo({ top: 0 });
+  $("#sidebar").classList.remove("open");
+  const sc = $("#sideScrim"); if (sc) sc.hidden = true;
+}
 window.addEventListener("hashchange", () => {
   const r = location.hash.replace("#", "");
   if (r && r !== route && visibleMenu().some(m => m.id === r)) { route = r; render(); }
@@ -1539,7 +1543,24 @@ function wireChrome() {
   document.addEventListener("click", ev => { if (!ev.target.closest(".search")) resEl.hidden = true; });
 
   $("#bell").addEventListener("click", () => go("notification"));
-  $("#hamb").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
+
+  const side = $("#sidebar"), scrim = $("#sideScrim");
+  function openSide(on) {
+    side.classList.toggle("open", on);
+    if (scrim) scrim.hidden = !on;
+  }
+  $("#hamb").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSide(!side.classList.contains("open"));
+  });
+  if (scrim) scrim.addEventListener("click", () => openSide(false));
+  /* menyentuh di mana pun di luar sidebar menutupnya kembali */
+  document.addEventListener("click", (e) => {
+    if (!side.classList.contains("open")) return;
+    if (e.target.closest("#sidebar") || e.target.closest("#hamb")) return;
+    openSide(false);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") openSide(false); });
 
   const RKEY = "foresty.rail", railBtn = $("#rail"), shellEl = $("#shell");
   function setRail(on) {

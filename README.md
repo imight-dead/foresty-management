@@ -12,6 +12,7 @@ Ada dua versi di repo ini:
 | `db/` | Skema, aturan keamanan, dan data awal | SQL, dijalankan di Supabase |
 | `supabase/functions/` | Edge Function penarik kotak masuk Gmail | Deno, di-deploy ke Supabase |
 | `gmail/` | Script sekali pakai untuk mengambil refresh token Google | Node 18+ |
+| `push/` | Script sekali pakai untuk membuat kunci VAPID Web Push | Node 18+ |
 
 ---
 
@@ -169,6 +170,52 @@ Refresh halaman Inbox — email langsung muncul.
 
 Isi kotak masuk di-cache 45 detik di server dan ditarik ulang otomatis tiap 3 menit, jadi kuota
 Gmail API aman. Tombol **Muat ulang** memaksa ambil data baru.
+
+
+---
+
+## Notifikasi perangkat (Web Push)
+
+Pengingat H-3, H-1, dan hari-H untuk program dan rapat dikirim ke HP atau laptop
+pengurus **walau aplikasinya sedang tidak dibuka**. Tiap orang menyalakannya sendiri
+lewat tombol di halaman Notification; izinnya diminta browser, bukan dipaksakan.
+
+Pengingat rapat hanya dikirim ke orang yang berhak masuk ruang rapat itu — aturan
+yang sama dengan yang dipakai menu Meeting.
+
+### 1. Buat kunci VAPID
+
+```bash
+node push/gen-vapid.mjs
+```
+
+Tempel kunci **publik** ke `app/config.js` pada `VAPID_PUBLIC_KEY`. Kunci **privat**
+jangan masuk git dan jangan ditempel di chat.
+
+### 2. Tabel dan penjadwalan
+
+Jalankan `db/08_push.sql` di SQL Editor. Sebelum Run, ganti `<REF>` dengan Reference ID
+proyek dan `<PUSH_CRON_SECRET>` dengan kata sandi karangan yang panjang.
+
+### 3. Deploy pengirimnya
+
+```bash
+npx supabase@latest secrets set --project-ref <REF>   VAPID_PUBLIC_KEY=<publik> VAPID_PRIVATE_KEY=<privat>   VAPID_SUBJECT=mailto:forestylab@gmail.com PUSH_CRON_SECRET=<secret yang sama>
+
+npx supabase@latest functions deploy push-send --no-verify-jwt
+```
+
+`--no-verify-jwt` diperlukan karena yang memanggil adalah cron, bukan pengguna.
+Sebagai gantinya function memeriksa header `x-cron-secret`.
+
+### Catatan
+
+- **Wajib HTTPS.** Berjalan di `localhost` untuk uji coba, dan di alamat Vercel untuk
+  pemakaian sehari-hari. Tidak jalan di `file://` atau HTTP biasa.
+- **iPhone dan iPad** hanya menerima push kalau aplikasinya dipasang ke Home Screen
+  dulu lewat Safari → Share → Add to Home Screen, lalu dibuka dari ikon itu.
+- Cron berjalan tiap 15 menit; `push_log` mencegah satu pengingat terkirim dua kali.
+- Perangkat yang mencabut izin otomatis dihapus dari `push_subs` saat pengiriman gagal.
 
 
 ---

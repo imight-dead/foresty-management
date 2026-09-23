@@ -4,8 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Foresty Management</title>
-<meta name="description" content="Sistem internal Foresty Laboratory — program kerja, tugas divisi, agenda, dan direktori pengurus.">
+<meta name="description" content="Foresty Laboratory internal system — work programs, division tasks, agenda, and the member directory.">
 <link rel="icon" href="logo.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#050505">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Foresty">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -30,36 +35,32 @@
 <div id="shell" hidden>
   <aside id="sidebar">
     <div class="brand">
-      <img src="logo.png" alt="Logo Foresty Laboratory" width="34" height="48">
+      <img src="logo.png" alt="Foresty Laboratory logo" width="34" height="48">
       <div class="btxt">
         <div class="bt">FORESTY<br>LABORATORY</div>
         <div class="bs">Forensics &amp; Security</div>
       </div>
     </div>
     <span class="labshow">FORESTY MANAGEMENT</span>
-    <nav id="nav" aria-label="Menu utama"></nav>
-    <button class="railtoggle" id="rail" aria-label="Sembunyikan menu" aria-expanded="true">
+    <nav id="nav" aria-label="Main menu"></nav>
+    <button class="railtoggle" id="rail" aria-label="Collapse menu" aria-expanded="true">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-      <span class="ntxt">Sembunyikan</span>
+      <span class="ntxt">Collapse</span>
     </button>
-    <div class="sidefoot">
-      SESSION <b>ACTIVE</b><br>
-      <span id="sync">MENYAMBUNG…</span>
-    </div>
   </aside>
 
   <div id="main">
     <header id="topbar">
-      <button class="hamb" id="hamb" aria-label="Buka menu">
+      <button class="hamb" id="hamb" aria-label="Open menu">
         <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" fill="none"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       </button>
       <div class="search">
         <span class="pr" aria-hidden="true">&gt;</span>
-        <input id="q" type="search" placeholder="search program / divisi / anggota..." autocomplete="off" aria-label="Pencarian">
+        <input id="q" type="search" placeholder="search program / division / member..." autocomplete="off" aria-label="Search">
         <div class="results" id="results" hidden></div>
       </div>
       <div class="tb-right">
-        <button class="bell" id="bell" aria-label="Notifikasi">
+        <button class="bell" id="bell" aria-label="Notifications">
           <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
           <span class="badge" id="bellCount" hidden>0</span>
         </button>

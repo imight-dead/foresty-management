@@ -12,10 +12,10 @@ const $ = (s, r = document) => r.querySelector(s);
 if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.includes("xxxxxxxx")) {
   document.body.innerHTML =
     '<div style="padding:40px;font-family:monospace;color:#fff;background:#050505;min-height:100vh">' +
-    '<h1 style="color:#E4181A">Konfigurasi belum diisi</h1>' +
-    '<p>Salin <code>config.example.js</code> menjadi <code>config.js</code>, ' +
-    'lalu isi SUPABASE_URL dan SUPABASE_ANON_KEY dari Supabase → Project Settings → API.</p></div>';
-  throw new Error("config.js belum diisi");
+    '<h1 style="color:#E4181A">Configuration not set</h1>' +
+    '<p>Copy <code>config.example.js</code> to <code>config.js</code>, ' +
+    'then fill in SUPABASE_URL and SUPABASE_ANON_KEY from Supabase → Project Settings → API.</p></div>';
+  throw new Error("config.js has not been filled in");
 }
 
 const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
@@ -23,15 +23,15 @@ const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
 /* ---------------------------------------------------------------- utilitas */
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const ini = n => String(n).split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
-const MO = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-const DW = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+const MO = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DW = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const fDate  = d => `${d.getDate()} ${MO[d.getMonth()]} ${d.getFullYear()}`;
 const fShort = d => `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
-const fTime  = d => `${String(d.getHours()).padStart(2,"0")}.${String(d.getMinutes()).padStart(2,"0")}`;
+const fTime  = d => `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 const key    = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const STATUS_LABEL = { ongoing:"Ongoing", completed:"Completed", soon:"Coming Soon" };
-const ST_LABEL = { todo:"Belum", doing:"Proses", done:"Selesai" };
-const LEVEL_LABEL = { inti:"Akses Penuh", staff:"Akses Terbatas" };
+const ST_LABEL = { todo:"To Do", doing:"In Progress", done:"Done" };
+const LEVEL_LABEL = { inti:"Full Access", staff:"Limited Access" };
 
 let toastT;
 function toast(msg, bad) {
@@ -110,19 +110,19 @@ const writeLog = (pid, text) =>
 /* ---------------------------------------------------------------- aksi */
 async function toggleCheck(pid, cid) {
   const p = prog(pid), c = p.checklist.find(x => x.id === cid);
-  if (!canCheck(c)) return toast("Hanya PIC item ini atau pengurus inti yang dapat mengubahnya.", true);
+  if (!canCheck(c)) return toast("Only this item's PIC or a core officer can change it.", true);
   const next = !c.done;
   c.done = next;                                    // tampilkan dulu, sinkronkan sesudahnya
   rerender();
   const { error } = await sb.from("checklist").update({
     done: next, done_by: next ? ME.user.id : null, done_at: next ? new Date().toISOString() : null,
   }).eq("id", cid);
-  if (error) { c.done = !next; rerender(); return fail(error, "Gagal menyimpan centang"); }
-  writeLog(pid, `${ME.member?.name || "Akun lab"} menandai "${c.text}" ${next ? "selesai" : "belum selesai"}`);
+  if (error) { c.done = !next; rerender(); return fail(error, "Could not save that tick"); }
+  writeLog(pid, `${ME.member?.name || "Lab account"} marked "${c.text}" as ${next ? "done" : "not done"}`);
 }
 
 async function cycleTask(did, mid, tid) {
-  if (!canTask(mid)) return toast("Kamu hanya dapat mengubah tugas atas namamu sendiri.", true);
+  if (!canTask(mid)) return toast("You can only change tasks assigned to you.", true);
   const d = DIVISIONS.find(x => x.id === did);
   const t = d.people.find(x => x.m === mid).tasks.find(x => x.id === tid);
   const order = ["todo", "doing", "done"];
@@ -130,29 +130,29 @@ async function cycleTask(did, mid, tid) {
   t.status = order[(order.indexOf(prev) + 1) % 3];
   rerender();
   const { error } = await sb.from("tasks").update({ status: t.status }).eq("id", tid);
-  if (error) { t.status = prev; rerender(); fail(error, "Gagal menyimpan status tugas"); }
+  if (error) { t.status = prev; rerender(); fail(error, "Could not save the task status"); }
 }
 
 async function addCheck(pid, text, who) {
   const { data, error } = await sb.from("checklist")
     .insert({ program_id: pid, text, member_id: who, created_by: ME.user.id })
     .select().single();
-  if (error) return fail(error, "Gagal menambah item");
+  if (error) return fail(error, "Could not add the item");
   prog(pid).checklist.push({ id: data.id, text: data.text, who: data.member_id, done: false, due: null });
-  writeLog(pid, `${ME.member?.name || "Akun lab"} menambahkan item "${text}"`);
+  writeLog(pid, `${ME.member?.name || "Lab account"} added the item "${text}"`);
   rerender();
-  toast("Item checklist ditambahkan.");
+  toast("Checklist item added.");
 }
 
 async function addTask(did, mid, text) {
-  if (!canTask(mid)) return toast("Kamu hanya dapat menambah tugas atas namamu sendiri.", true);
+  if (!canTask(mid)) return toast("You can only add tasks under your own name.", true);
   const { data, error } = await sb.from("tasks")
     .insert({ division_id: did, member_id: mid, text, created_by: ME.user.id })
     .select().single();
-  if (error) return fail(error, "Gagal menambah tugas");
+  if (error) return fail(error, "Could not add the task");
   DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks.push(data);
   rerender();
-  toast("Tugas ditambahkan.");
+  toast("Task added.");
 }
 
 async function markRead(keys) {
@@ -162,18 +162,135 @@ async function markRead(keys) {
   rerender();
   const { error } = await sb.from("notif_read")
     .upsert(baru.map(k => ({ user_id: ME.user.id, notif_key: k })), { onConflict: "user_id,notif_key" });
-  if (error) fail(error, "Gagal menyimpan status baca");
+  if (error) fail(error, "Could not save the read status");
+}
+
+/* ---------------------------------------------------------------- push */
+/* Notifikasi perangkat: izin diminta sekali, langganan disimpan di
+   Supabase, lalu server yang mengirim pengingat lewat Web Push — bekerja
+   walaupun aplikasinya sedang tidak dibuka. */
+
+let PUSH = { supported: false, permission: "default", on: false, busy: false, reg: null, err: null };
+
+const pushCapable = () =>
+  "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+function urlB64ToUint8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function initPush() {
+  PUSH.supported = pushCapable();
+  if (!PUSH.supported) return;
+  PUSH.permission = Notification.permission;
+  try {
+    PUSH.reg = await navigator.serviceWorker.register("sw.js");
+    const sub = await PUSH.reg.pushManager.getSubscription();
+    PUSH.on = !!sub && PUSH.permission === "granted";
+    if (sub && PUSH.on) await storeSub(sub);    /* pastikan baris server masih ada */
+  } catch (e) {
+    PUSH.err = e.message;
+    console.error("service worker", e);
+  }
+  render();
+}
+
+async function storeSub(sub) {
+  const j = sub.toJSON();
+  const { error } = await sb.from("push_subs").upsert({
+    endpoint: sub.endpoint,
+    user_id: ME.user.id,
+    p256dh: j.keys.p256dh,
+    auth: j.keys.auth,
+    agent: navigator.userAgent.slice(0, 200),
+  }, { onConflict: "endpoint" });
+  if (error) throw error;
+}
+
+async function enablePush() {
+  if (!CFG.VAPID_PUBLIC_KEY || CFG.VAPID_PUBLIC_KEY.startsWith("PASTE")) {
+    return toast("VAPID_PUBLIC_KEY has not been set in config.js.", true);
+  }
+  PUSH.busy = true; render();
+  try {
+    const perm = await Notification.requestPermission();
+    PUSH.permission = perm;
+    if (perm !== "granted") {
+      PUSH.busy = false; render();
+      return toast(perm === "denied"
+        ? "Notifications are blocked. Allow them in your browser settings for this site."
+        : "Notification permission was not granted.", true);
+    }
+    if (!PUSH.reg) PUSH.reg = await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+
+    const sub = await PUSH.reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8(CFG.VAPID_PUBLIC_KEY),
+    });
+    await storeSub(sub);
+    PUSH.on = true;
+    toast("Device notifications are on.");
+  } catch (e) {
+    PUSH.err = e.message;
+    fail(e, "Could not turn on notifications");
+  }
+  PUSH.busy = false; render();
+}
+
+async function disablePush() {
+  PUSH.busy = true; render();
+  try {
+    const sub = PUSH.reg && await PUSH.reg.pushManager.getSubscription();
+    if (sub) {
+      await sb.from("push_subs").delete().eq("endpoint", sub.endpoint);
+      await sub.unsubscribe();
+    }
+    PUSH.on = false;
+    toast("Device notifications are off on this device.");
+  } catch (e) {
+    fail(e, "Could not turn off notifications");
+  }
+  PUSH.busy = false; render();
+}
+
+function pushPanel() {
+  if (!PUSH.supported) {
+    return `<div class="pushbar off">
+      <div><div class="label">Device Notifications</div>
+      <div class="meta" style="margin-top:4px">This browser cannot receive push notifications. On iPhone, add this app to the Home Screen first, then open it from there.</div></div>
+    </div>`;
+  }
+  if (PUSH.permission === "denied") {
+    return `<div class="pushbar off">
+      <div><div class="label">Device Notifications</div>
+      <div class="meta" style="margin-top:4px">Blocked for this site. Allow notifications in your browser settings, then reload.</div></div>
+    </div>`;
+  }
+  return `<div class="pushbar${PUSH.on ? " on" : ""}">
+      <div style="flex:1;min-width:200px">
+        <div class="label">Device Notifications ${PUSH.on ? '<span class="tag t-completed" style="margin-left:6px">On</span>' : '<span class="tag t-soon" style="margin-left:6px">Off</span>'}</div>
+        <div class="meta" style="margin-top:4px">${PUSH.on
+          ? "This device receives H-3, H-1, and same-day reminders for programs and meetings, even when the app is closed."
+          : "Turn this on to get program and meeting reminders on this phone or laptop."}</div>
+      </div>
+      <button class="btn${PUSH.on ? " ghost" : ""}" data-push="${PUSH.on ? "off" : "on"}"${PUSH.busy ? " disabled" : ""}>
+        ${PUSH.busy ? "Working…" : PUSH.on ? "Turn Off" : "Turn On Notifications"}
+      </button>
+    </div>`;
 }
 
 /* ---------------------------------------------------------------- notulen */
 let meetingsReady = true;
 
 const ROOMS = [
-  { id: "koorinti", label: "Rapat Koorinti",                short: "Koorinti" },
-  { id: "hr",       label: "Rapat Divisi HR",               short: "HR",              div: "Human Resource" },
-  { id: "medpart",  label: "Rapat Divisi Media & Partner",  short: "Media & Partner", div: "Media & Partner" },
-  { id: "sg",       label: "Rapat Divisi Study Group",      short: "Study Group",     div: "Study Group" },
-  { id: "rnd",      label: "Rapat Divisi RnD",              short: "RnD",             div: "Research & Development" },
+  { id: "koorinti", label: "Core Committee Meeting",        short: "Core" },
+  { id: "hr",       label: "HR Division Meeting",           short: "HR",              div: "Human Resource" },
+  { id: "medpart",  label: "Media & Partner Meeting",       short: "Media & Partner", div: "Media & Partner" },
+  { id: "sg",       label: "Study Group Meeting",           short: "Study Group",     div: "Study Group" },
+  { id: "rnd",      label: "RnD Division Meeting",          short: "RnD",             div: "Research & Development" },
 ];
 const room = id => ROOMS.find(r => r.id === id);
 
@@ -206,10 +323,10 @@ function buildNotifs() {
     for (const r of RULES) {
       const fire = new Date(p.date); fire.setDate(fire.getDate() - r.d); fire.setHours(7, 0, 0, 0);
       if (fire > now) continue;
-      const kata = r.d === 0 ? "hari ini" : r.d === 1 ? "besok" : `${r.d} hari lagi`;
+      const kata = r.d === 0 ? "today" : r.d === 1 ? "tomorrow" : `in ${r.d} days`;
       out.push({
         id: `${p.id}:${r.l}`, trig: r.l, fire, pid: p.id, kind: "event",
-        text: `Reminder: <b>${esc(p.title)}</b> akan berlangsung ${kata}, ${fDate(p.date)} pukul ${fTime(p.date)} di ${esc(p.place)}.`,
+        text: `Reminder: <b>${esc(p.title)}</b> takes place ${kata}, ${fDate(p.date)} at ${fTime(p.date)}, ${esc(p.place)}.`,
       });
     }
     for (const c of p.checklist) {
@@ -220,8 +337,8 @@ function buildNotifs() {
       out.push({
         id: `${p.id}:${c.id}:due`, trig: late ? "OVERDUE" : "H-1", fire, pid: p.id, kind: "task",
         text: late
-          ? `Terlambat: checklist <b>${esc(c.text)}</b> pada ${esc(p.title)} melewati tenggat ${fDate(c.due)} pukul ${fTime(c.due)}. PIC: ${esc(pic?.name || "-")}.`
-          : `Tenggat besok: checklist <b>${esc(c.text)}</b> pada ${esc(p.title)} jatuh tempo ${fDate(c.due)} pukul ${fTime(c.due)}. PIC: ${esc(pic?.name || "-")}.`,
+          ? `Overdue: checklist item <b>${esc(c.text)}</b> on ${esc(p.title)} passed its due date ${fDate(c.due)} at ${fTime(c.due)}. PIC: ${esc(pic?.name || "-")}.`
+          : `Due tomorrow: checklist item <b>${esc(c.text)}</b> on ${esc(p.title)} is due ${fDate(c.due)} at ${fTime(c.due)}. PIC: ${esc(pic?.name || "-")}.`,
       });
     }
   }
@@ -229,10 +346,10 @@ function buildNotifs() {
     for (const r of RULES) {
       const fire = new Date(mt.held); fire.setDate(fire.getDate() - r.d); fire.setHours(7, 0, 0, 0);
       if (fire > now || mt.held < now) continue;
-      const kata = r.d === 0 ? "hari ini" : r.d === 1 ? "besok" : `${r.d} hari lagi`;
+      const kata = r.d === 0 ? "today" : r.d === 1 ? "tomorrow" : `in ${r.d} days`;
       out.push({
         id: `mtg:${mt.id}:${r.l}`, trig: r.l, fire, mid: mt.id, kind: "meeting",
-        text: `Reminder: <b>${esc(mt.title)}</b> akan berlangsung ${kata}, ${fDate(mt.held)} pukul ${fTime(mt.held)}${mt.place ? " di " + esc(mt.place) : ""}.`,
+        text: `Reminder: <b>${esc(mt.title)}</b> takes place ${kata}, ${fDate(mt.held)} at ${fTime(mt.held)}${mt.place ? ", " + esc(mt.place) : ""}.`,
       });
     }
   }
@@ -264,7 +381,7 @@ const avatars = ids => `<div class="avs">${ids.map(i => `<span class="av-s" titl
 
 function countdown(d) {
   return `<div class="cd num" data-ts="${d.getTime()}">
-    <span data-u="d">--<b>Hari</b></span><span data-u="h">--<b>Jam</b></span><span data-u="m">--<b>Min</b></span><span data-u="s">--<b>Det</b></span></div>`;
+    <span data-u="d">--<b>Days</b></span><span data-u="h">--<b>Hrs</b></span><span data-u="m">--<b>Min</b></span><span data-u="s">--<b>Sec</b></span></div>`;
 }
 function tickCountdowns() {
   const now = Date.now();
@@ -281,9 +398,9 @@ setInterval(tickCountdowns, 1000);
 
 function cdShort(d) {
   const ms = d - new Date();
-  if (ms < 0) return "Lewat " + Math.ceil(-ms / 864e5) + " hari";
+  if (ms < 0) return Math.ceil(-ms / 864e5) + " days ago";
   const days = Math.ceil(ms / 864e5);
-  return days <= 1 ? "Kurang dari 24 jam" : "T-" + String(days).padStart(2, "0") + " hari";
+  return days <= 1 ? "Less than 24 hours" : "T-" + String(days).padStart(2, "0") + " days";
 }
 
 function stat(label, value, mod, sub) {
@@ -371,12 +488,12 @@ function heroBlock(title, lead) {
     <svg class="fp" aria-hidden="true"><use href="#ic-fp"/></svg>
     <div class="hero-in">
       <div>
-        <div class="kick">Foresty Laboratory · Periode 2026 / 2027</div>
+        <div class="kick">Foresty Laboratory · Term 2026 / 2027</div>
         <h1>${esc(title)}<span class="cursor"></span></h1>
         <p class="lead">${lead}</p>
       </div>
       <div class="hero-clock">
-        <div class="label">Waktu Sistem</div>
+        <div class="label">System Time</div>
         <div class="t num" id="clock">${fTime(now)}</div>
         <div class="meta" style="justify-content:flex-end">${DW[now.getDay()]}, ${fDate(now)}</div>
       </div>
@@ -397,17 +514,17 @@ function viewDashboard() {
       <span class="idx num">${String(i + 1).padStart(2, "0")}</span>
       <span class="nm"><b>${esc(e.title)}</b><span class="meta">${esc(e.sub)} · ${fShort(e.when)} · ${fTime(e.when)}</span></span>
       ${countdown(e.when)}
-    </button>`).join("") || `<div class="empty">Tidak ada agenda terdekat.</div>`;
+    </button>`).join("") || `<div class="empty">No upcoming agenda.</div>`;
 
-  const sapaan = ME.isLab ? "Akun Lab" : ME.member.name.split(" ")[0];
+  const sapaan = ME.isLab ? "Lab Account" : ME.member.name.split(" ")[0];
 
   return heroBlock("Operations Console",
-    `Halo, ${esc(sapaan)}. Pusat kendali program kerja, penugasan divisi, dan agenda Foresty Laboratory.`) + `
+    `Hello, ${esc(sapaan)}. Control centre for work programs, division assignments, and the Foresty Laboratory agenda.`) + `
     <div class="grid g-sum" style="margin-bottom:22px">
-      ${stat("Program Ongoing", ongoing, "red", "dari " + PROGRAMS.length + " total program")}
-      ${stat("Checklist Belum Selesai", openTasks, "", "tersebar di program aktif")}
-      ${stat("Notifikasi Belum Dibaca", unread, unread ? "red" : "ok", "pemicu H-3 / H-1 / H-0")}
-      ${stat("Anggota Terdaftar", MEMBERS.length, "", DIVISIONS.length + " divisi kepengurusan")}
+      ${stat("Ongoing Programs", ongoing, "red", "of " + PROGRAMS.length + " programs in total")}
+      ${stat("Open Checklist Items", openTasks, "", "across active programs")}
+      ${stat("Unread Notifications", unread, unread ? "red" : "ok", "H-3 / H-1 / H-0 triggers")}
+      ${stat("Registered Members", MEMBERS.length, "", DIVISIONS.length + " committee divisions")}
     </div>
     <div class="dash">
       <section class="card">
@@ -416,7 +533,7 @@ function viewDashboard() {
         <div class="dl">${rows}</div>
       </section>
       <section class="card">
-        <div class="sec-head"><div><div class="kick">Kalender</div><h2>Agenda Bulanan</h2></div></div>
+        <div class="sec-head"><div><div class="kick">Calendar</div><h2>Monthly Agenda</h2></div></div>
         <div class="rule" style="margin:12px 0 14px"></div>
         ${calendar()}
       </section>
@@ -447,16 +564,16 @@ function calendar() {
           <i class="dot" style="margin-top:7px;background:${e.type === "completed" ? "var(--ok)" : e.type === "soon" ? "var(--dim)" : "var(--red)"}"></i>
           <span><span class="evn" style="font-size:12.5px">${esc(e.title)}</span>
           <span class="meta">${fTime(e.when)} · ${esc(e.sub)}</span></span></button>`).join("")
-        : `<div class="meta">Tidak ada agenda pada tanggal ini.</div>`}
-    </div>` : `<div class="day-detail"><div class="meta">Pilih tanggal untuk melihat detail agenda.</div></div>`;
+        : `<div class="meta">No agenda on this date.</div>`}
+    </div>` : `<div class="day-detail"><div class="meta">Select a date to see its agenda.</div></div>`;
 
   return `<div class="cal-head">
       <span class="mo">${MO[m]} ${y}</span>
-      <button class="cal-nav" data-cal="-1" aria-label="Bulan sebelumnya">&lt;</button>
-      <button class="cal-nav" data-cal="0" aria-label="Bulan ini">•</button>
-      <button class="cal-nav" data-cal="1" aria-label="Bulan berikutnya">&gt;</button>
+      <button class="cal-nav" data-cal="-1" aria-label="Previous month">&lt;</button>
+      <button class="cal-nav" data-cal="0" aria-label="This month">•</button>
+      <button class="cal-nav" data-cal="1" aria-label="Next month">&gt;</button>
     </div>
-    <div class="cal">${["Sen","Sel","Rab","Kam","Jum","Sab","Min"].map(d => `<span class="dow">${d}</span>`).join("")}${cells}</div>
+    <div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<span class="dow">${d}</span>`).join("")}${cells}</div>
     ${detail}`;
 }
 
@@ -479,15 +596,15 @@ function viewPrograms() {
       <div class="bar${pr.pct === 100 ? " done" : ""}"><i style="width:${pr.pct}%"></i></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:13px">
         ${avatars(p.pics)}
-        ${p.status === "completed" ? '<span class="meta">Selesai</span>' : `<span class="meta num">${cdShort(p.date)}</span>`}
+        ${p.status === "completed" ? '<span class="meta">Completed</span>' : `<span class="meta num">${cdShort(p.date)}</span>`}
       </div>
     </button>`;
-  }).join("") || `<div class="empty">Belum ada program pada kategori ini.</div>`;
+  }).join("") || `<div class="empty">No programs in this category.</div>`;
 
   return `<div class="sec-head" style="justify-content:space-between">
-      <div><div class="kick">Program Kerja</div><h1>Programs</h1>
-      <p class="sec-sub">Seluruh program kerja laboratorium periode 26/27. Klik kartu untuk membuka detail, PIC, dan checklist persiapan.</p></div>
-      ${canAll() ? `<button class="btn" data-newprog>+ Program Baru</button>` : ""}
+      <div><div class="kick">Work Programs</div><h1>Programs</h1>
+      <p class="sec-sub">Every laboratory work program for the 26/27 term.</p></div>
+      ${canAll() ? `<button class="btn" data-newprog>+ New Program</button>` : ""}
     </div>
     <div class="rule"></div>
     <div class="tabs">
@@ -504,7 +621,7 @@ function modalProgram(pid) {
     return `<button class="chk${c.done ? " on" : ""}${canCheck(c) ? "" : " locked"}" data-check="${p.id}|${c.id}">
       <span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 5"/></svg></span>
       <span><span class="t">${esc(c.text)}</span>
-      <span class="who">PIC ${esc(pic?.name || "-")}${c.due ? ` · tenggat ${fShort(c.due)} ${fTime(c.due)}` : ""}
+      <span class="who">PIC ${esc(pic?.name || "-")}${c.due ? ` · due ${fShort(c.due)} ${fTime(c.due)}` : ""}
       ${late ? '<span class="tag t-over" style="margin-left:6px">Overdue</span>' : ""}</span></span>
     </button>`;
   }).join("");
@@ -515,7 +632,7 @@ function modalProgram(pid) {
         <h2 style="margin:10px 0 6px">${esc(p.title)}</h2>
         <div class="meta">${DW[p.date.getDay()]}, ${fDate(p.date)} · ${fTime(p.date)} WIB · ${esc(p.place)}</div>
         ${p.status !== "completed" ? `<div style="margin-top:14px">${countdown(p.date)}</div>` : ""}
-        ${canAll() ? `<div style="margin-top:14px"><button class="btn ghost sm" data-editprog="${p.id}">Ubah Program</button></div>` : ""}
+        ${canAll() ? `<div style="margin-top:14px"><button class="btn ghost sm" data-editprog="${p.id}">Edit Program</button></div>` : ""}
       </div>
     </div>
     <div class="modal-body">
@@ -531,25 +648,25 @@ function modalProgram(pid) {
           }).join("")}</div>
         </div>
         <div class="pane">
-          <div class="label" style="margin-bottom:9px">Progres Persiapan</div>
+          <div class="label" style="margin-bottom:9px">Preparation Progress</div>
           <div style="display:flex;align-items:baseline;gap:8px">
             <span class="num" style="font-family:var(--disp);font-size:30px;font-weight:700;color:${pr.pct === 100 ? "var(--ok)" : "var(--red)"}">${pr.pct}%</span>
-            <span class="meta">${pr.done} dari ${pr.total} item selesai</span>
+            <span class="meta">${pr.done} of ${pr.total} items done</span>
           </div>
           <div class="bar${pr.pct === 100 ? " done" : ""}" style="margin-top:9px"><i style="width:${pr.pct}%"></i></div>
-          ${p.log.length ? `<div class="label" style="margin:16px 0 8px">Riwayat Aktivitas</div>
+          ${p.log.length ? `<div class="label" style="margin:16px 0 8px">Activity Log</div>
             <div class="log">${p.log.map(l => `<span><b>${fShort(l.t)} ${fTime(l.t)}</b> — ${esc(l.s)}</span>`).join("")}</div>` : ""}
         </div>
       </div>
       <div>
-        <div class="label" style="margin-bottom:9px">Checklist Keperluan &amp; Persiapan</div>
-        <div class="stack">${items || `<div class="empty">Belum ada item checklist.</div>`}</div>
+        <div class="label" style="margin-bottom:9px">Preparation Checklist</div>
+        <div class="stack">${items || `<div class="empty">No checklist items yet.</div>`}</div>
         ${canAll() ? `<form class="addrow" data-addcheck="${p.id}">
-            <input class="ainput" name="text" placeholder="Tambah item checklist baru..." required>
+            <input class="ainput" name="text" placeholder="Add a new checklist item..." required>
             <select class="ainput" name="who" style="max-width:190px">${MEMBERS.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>
-            <button class="btn sm" type="submit">Tambah</button>
+            <button class="btn sm" type="submit">Add</button>
           </form>`
-          : `<div class="meta" style="margin-top:10px">Kamu hanya dapat mencentang item yang tercatat atas namamu.</div>`}
+          : `<div class="meta" style="margin-top:10px">You can only tick items assigned to you.</div>`}
       </div>
     </div>`;
 }
@@ -565,19 +682,19 @@ function modalProgramForm(pid) {
 
   return `<div class="modal-head"><div class="dots"></div>
       <div style="position:relative">
-        <div class="kick">${p ? "Ubah Program" : "Program Baru"}</div>
-        <h2 style="margin:8px 0 4px">${p ? esc(p.title) : "Tambah Program Kerja"}</h2>
-        <div class="meta">Tersimpan ke database lab, langsung terlihat oleh semua pengurus.</div>
+        <div class="kick">${p ? "Edit Program" : "New Program"}</div>
+        <h2 style="margin:8px 0 4px">${p ? esc(p.title) : "Add Work Program"}</h2>
+        <div class="meta">Saved to the lab database and visible to everyone straight away.</div>
       </div></div>
     <div class="modal-body">
       <form class="aform" data-progform="${p ? p.id : ""}">
-        <label class="afield"><span class="label">Nama program</span>
+        <label class="afield"><span class="label">Program name</span>
           <input class="ainput" name="title" value="${p ? esc(p.title) : ""}" placeholder="Labshow PKKMB Prodi ..." required></label>
 
         <div class="cols" style="gap:13px">
-          <label class="afield"><span class="label">Tanggal</span>
+          <label class="afield"><span class="label">Date</span>
             <input class="ainput" type="date" name="tgl" value="${dInput(d)}" required></label>
-          <label class="afield"><span class="label">Jam (WIB)</span>
+          <label class="afield"><span class="label">Time (WIB)</span>
             <input class="ainput" type="time" name="jam" value="${tInput(d)}" required></label>
           <label class="afield"><span class="label">Status</span>
             <select class="ainput" name="status">
@@ -586,11 +703,11 @@ function modalProgramForm(pid) {
             </select></label>
         </div>
 
-        <label class="afield"><span class="label">Tempat</span>
-          <input class="ainput" name="place" value="${p ? esc(p.place) : ""}" placeholder="Aula Fakultas / Daring"></label>
+        <label class="afield"><span class="label">Venue</span>
+          <input class="ainput" name="place" value="${p ? esc(p.place) : ""}" placeholder="Faculty Hall / Online"></label>
 
-        <label class="afield"><span class="label">Deskripsi</span>
-          <textarea class="ainput" name="descr" rows="3" placeholder="Gambaran singkat program">${p ? esc(p.desc) : ""}</textarea></label>
+        <label class="afield"><span class="label">Description</span>
+          <textarea class="ainput" name="descr" rows="3" placeholder="Short summary of the program">${p ? esc(p.desc) : ""}</textarea></label>
 
         <div class="afield">
           <span class="label">Person in Charge</span>
@@ -599,12 +716,12 @@ function modalProgramForm(pid) {
               <input type="checkbox" name="pic" value="${m.id}"${pics.includes(m.id) ? " checked" : ""}>
               <span><b>${esc(m.name)}</b><i>${esc(m.role)}</i></span>
             </label>`).join("")}</div>
-          <span class="meta" style="margin-top:6px">PIC yang dipilih otomatis muncul di menu Division dan Foresty 26/27.</span>
+          <span class="meta" style="margin-top:6px">Selected PICs appear automatically under Division and Foresty 26/27.</span>
         </div>
 
         <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:6px">
-          <button class="btn" type="submit">${p ? "Simpan Perubahan" : "Buat Program"}</button>
-          ${p ? `<button class="btn ghost" type="button" data-progdel="${p.id}">Hapus Program</button>` : ""}
+          <button class="btn" type="submit">${p ? "Save Changes" : "Create Program"}</button>
+          ${p ? `<button class="btn ghost" type="button" data-progdel="${p.id}">Delete Program</button>` : ""}
         </div>
       </form>
     </div>`;
@@ -613,10 +730,10 @@ function modalProgramForm(pid) {
 async function saveProgram(pid, f) {
   const pics = [...f.querySelectorAll("input[name=pic]:checked")].map(x => x.value);
   const title = f.title.value.trim();
-  if (!title) return toast("Nama program belum diisi.", true);
+  if (!title) return toast("Program name is empty.", true);
 
   const starts = new Date(`${f.tgl.value}T${f.jam.value || "08:00"}`);
-  if (isNaN(starts)) return toast("Tanggal atau jam belum benar.", true);
+  if (isNaN(starts)) return toast("Date or time is not valid.", true);
 
   const body = {
     title, status: f.status.value, starts_at: starts.toISOString(),
@@ -629,12 +746,12 @@ async function saveProgram(pid, f) {
   let id = pid;
   if (pid) {
     const { error } = await sb.from("programs").update(body).eq("id", pid);
-    if (error) { btn.disabled = false; return fail(error, "Gagal menyimpan program"); }
+    if (error) { btn.disabled = false; return fail(error, "Could not save the program"); }
   } else {
     id = (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "program")
        + "-" + Math.random().toString(36).slice(2, 6);
     const { error } = await sb.from("programs").insert({ id, ...body, sort: PROGRAMS.length + 1 });
-    if (error) { btn.disabled = false; return fail(error, "Gagal membuat program"); }
+    if (error) { btn.disabled = false; return fail(error, "Could not create the program"); }
   }
 
   /* PIC ditulis ulang: hapus yang lama, pasang pilihan sekarang */
@@ -642,25 +759,25 @@ async function saveProgram(pid, f) {
   if (pics.length) {
     const { error } = await sb.from("program_pics")
       .insert(pics.map((m, i) => ({ program_id: id, member_id: m, sort: i + 1 })));
-    if (error) fail(error, "Program tersimpan, tapi PIC gagal dipasang");
+    if (error) fail(error, "Program saved, but the PICs could not be set");
   }
 
   await loadAll();
   progTab = body.status;
   showModal("prog", id);
   render();
-  toast(pid ? "Program diperbarui." : "Program dibuat.");
+  toast(pid ? "Program updated." : "Program created.");
 }
 
 async function deleteProgram(pid) {
   const p = prog(pid);
-  if (!confirm(`Hapus "${p.title}" beserta seluruh checklist dan PIC-nya? Tindakan ini tidak bisa dibatalkan.`)) return;
+  if (!confirm(`Delete "${p.title}" along with all its checklist items and PICs? This cannot be undone.`)) return;
   const { error } = await sb.from("programs").delete().eq("id", pid);
-  if (error) return fail(error, "Gagal menghapus program");
+  if (error) return fail(error, "Could not delete the program");
   closeModal();
   await loadAll();
   render();
-  toast("Program dihapus.");
+  toast("Program deleted.");
 }
 
 /* ---------------------------------------------------------------- DIVISION */
@@ -685,23 +802,23 @@ function viewDivision() {
   const cards = DIVISIONS.map(d => {
     const st = divStats(d);
     return `<button class="card click" data-open-div="${d.id}">
-      <div class="label">Divisi</div>
+      <div class="label">Division</div>
       <h3 style="margin:6px 0 7px">${esc(d.name)}</h3>
       <p class="meta" style="min-height:34px">${esc(d.tagline)}</p>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
-        <span class="label">Tugas &amp; Checklist</span>
+        <span class="label">Tasks &amp; Checklist</span>
         ${st.total
           ? `<span class="num" style="font-size:11px;color:${st.pct === 100 ? "var(--ok)" : "var(--red)"}">${st.done}/${st.total} · ${st.pct}%</span>`
-          : `<span class="meta">belum ada</span>`}
+          : `<span class="meta">none yet</span>`}
       </div>
       <div class="bar${st.pct === 100 && st.total ? " done" : ""}"><i style="width:${st.pct}%"></i></div>
-      <div class="meta" style="margin-top:9px"><span class="num">${String(st.progs).padStart(2, "0")}</span> program</div>
+      <div class="meta" style="margin-top:9px"><span class="num">${String(st.progs).padStart(2, "0")}</span> programs</div>
       <div style="margin-top:13px">${avatars(d.people.map(p => p.m))}</div>
     </button>`;
   }).join("");
 
-  return `<div class="sec-head"><div><div class="kick">Struktur Kepengurusan</div><h1>Division</h1>
-      <p class="sec-sub">Pembagian tugas tiap divisi, dikelompokkan per penanggung jawab. Klik status tugas untuk memutar: Belum → Proses → Selesai.</p></div></div>
+  return `<div class="sec-head"><div><div class="kick">Committee Structure</div><h1>Division</h1>
+      <p class="sec-sub">How work is split across each division.</p></div></div>
     <div class="rule"></div>
     <div class="grid g3">${cards}</div>`;
 }
@@ -715,15 +832,15 @@ function dutyBlock(mid) {
   if (!asPic.length && !items.length) return "";
 
   return `<div class="duty">
-    <div class="label" style="margin-bottom:8px">Tanggung Jawab Program</div>
+    <div class="label" style="margin-bottom:8px">Program Responsibilities</div>
     ${asPic.length ? `<div class="chips">${asPic.map(p =>
       `<button class="chip" data-open-prog="${p.id}">PIC · ${esc(p.title)}</button>`).join("")}</div>` : ""}
     ${items.length ? `<div class="kan" style="margin-top:9px">${items.map(({ p, c }) => {
       const late = c.due && !c.done && c.due < new Date();
       return `<button class="task${c.done ? " done" : ""}${canCheck(c) ? "" : " locked"}" data-check="${p.id}|${c.id}">
         <span class="st ${c.done ? "done" : late ? "doing" : "todo"}"></span>
-        <span class="tx">${esc(c.text)}<span class="who" style="display:block">${esc(p.title)}${c.due ? ` · tenggat ${fShort(c.due)}` : ""}</span></span>
-        <span class="stl">${c.done ? "Selesai" : late ? "Telat" : "Belum"}</span></button>`;
+        <span class="tx">${esc(c.text)}<span class="who" style="display:block">${esc(p.title)}${c.due ? ` · due ${fShort(c.due)}` : ""}</span></span>
+        <span class="stl">${c.done ? "Done" : late ? "Late" : "To Do"}</span></button>`;
     }).join("")}</div>` : ""}
   </div>`;
 }
@@ -733,7 +850,7 @@ const taskRow = (did, mid, t) => `<button class="task${t.status === "done" ? " d
 
 const addTaskForm = (did, mid) => canTask(mid)
   ? `<form class="addrow" data-addtask="${did}|${mid}">
-       <input class="ainput" name="text" placeholder="Tambah tugas..." required>
+       <input class="ainput" name="text" placeholder="Add a task..." required>
        <button class="btn sm" type="submit">+</button></form>` : "";
 
 function modalDivision(did) {
@@ -745,8 +862,8 @@ function modalDivision(did) {
         <span class="av">${ini(m.name)}</span>
         <span><span class="pn">${esc(m.name)}</span><span class="pr2">${esc(m.role)}</span></span>
       </div>
-      <div class="label" style="margin-bottom:7px">Tugas Divisi</div>
-      <div class="kan">${p.tasks.map(t => taskRow(d.id, p.m, t)).join("") || `<div class="meta">Belum ada tugas divisi.</div>`}</div>
+      <div class="label" style="margin-bottom:7px">Division Tasks</div>
+      <div class="kan">${p.tasks.map(t => taskRow(d.id, p.m, t)).join("") || `<div class="meta">No division tasks yet.</div>`}</div>
       ${addTaskForm(d.id, p.m)}
       ${dutyBlock(p.m)}
     </div>`;
@@ -754,12 +871,12 @@ function modalDivision(did) {
 
   return `<div class="modal-head"><div class="dots"></div>
       <div style="position:relative">
-        <div class="kick">Divisi Kepengurusan 26/27</div>
+        <div class="kick">26/27 Committee Division</div>
         <h2 style="margin:8px 0 6px">${esc(d.name)}</h2>
         <div class="meta">${esc(d.tagline)}</div>
       </div></div>
     <div class="modal-body">
-      <div class="label">Tugas per Penanggung Jawab</div>
+      <div class="label">Tasks by Person</div>
       <div class="cols">${blocks}</div>
     </div>`;
 }
@@ -778,7 +895,7 @@ function memberCard(m) {
       <div style="font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:13px;text-transform:uppercase">${esc(m.name)}</div>
       <div class="meta" style="justify-content:center;margin-top:4px">${esc(m.role)}</div>
       <div class="rule" style="margin:12px 0 9px"></div>
-      <div class="meta" style="justify-content:center">${esc(m.div)} · ${n} program</div>
+      <div class="meta" style="justify-content:center">${esc(m.div)} · ${n} programs</div>
     </button>`;
 }
 
@@ -790,30 +907,30 @@ function viewForesty() {
     return { name: d.name, people };
   });
   const rest = MEMBERS.filter(m => !seen.has(m.id));
-  if (rest.length) groups.push({ name: "Anggota Lain", people: rest });
+  if (rest.length) groups.push({ name: "Other Members", people: rest });
 
   const sections = groups.filter(g => g.people.length).map(g => `
     <section class="mgroup">
       <div class="mgroup-h">
         <h3>${esc(g.name)}</h3>
-        <span class="meta num">${String(g.people.length).padStart(2, "0")} orang</span>
+        <span class="meta num">${String(g.people.length).padStart(2, "0")} people</span>
       </div>
       <div class="grid g4">${g.people.map(memberCard).join("")}</div>
     </section>`).join("");
 
-  return `<div class="sec-head"><div><div class="kick">Direktori Anggota</div><h1>Foresty 26/27</h1>
-      <p class="sec-sub">Seluruh pengurus, asisten laboratorium, dan tim riset periode 2026/2027, dikelompokkan per jabatan. Klik anggota untuk melihat profil dan program yang menjadi tanggung jawabnya.</p></div></div>
+  return `<div class="sec-head"><div><div class="kick">Member Directory</div><h1>Foresty 26/27</h1>
+      <p class="sec-sub">Every committee member, lab assistant, and researcher of the 2026/2027 term.</p></div></div>
     <div class="rule"></div>
     <div class="advisor">
       <svg class="fp" aria-hidden="true"><use href="#ic-fp"/></svg>
       <span class="av-s adv">${ADVISOR.init}</span>
       <div style="position:relative">
-        <div class="kick">Dosen Pembimbing</div>
+        <div class="kick">Advisor</div>
         <div class="advname">${esc(ADVISOR.name)}</div>
         <div class="meta">${esc(ADVISOR.role)}</div>
       </div>
     </div>
-    <div class="label" style="margin:26px 0 18px">Pengurus, Aslab &amp; Tim Riset · ${MEMBERS.length} orang</div>
+    <div class="label" style="margin:26px 0 18px">Committee, Lab Assistants &amp; Research Team · ${MEMBERS.length} people</div>
     ${sections}`;
 }
 
@@ -827,7 +944,7 @@ function modalMember(mid) {
       <div style="position:relative;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <span class="av-s" style="width:62px;height:62px;font-size:22px;display:grid;margin:0">${ini(m.name)}</span>
         <div>
-          <div class="kick">Aslab · Foresty 26/27</div>
+          <div class="kick">Lab Assistant · Foresty 26/27</div>
           <h2 style="margin:6px 0 4px">${esc(m.name)}</h2>
           <div class="meta">${esc(m.role)} · ${esc(m.div)}</div>
         </div>
@@ -835,22 +952,22 @@ function modalMember(mid) {
     <div class="modal-body">
       <div class="cols">
         <div class="pane">
-          <div class="label" style="margin-bottom:8px">Profil</div>
-          <div class="kv"><span class="k">Nama</span><span>${esc(m.name)}</span></div>
-          <div class="kv"><span class="k">Jabatan</span><span>${esc(m.role)}</span></div>
-          <div class="kv"><span class="k">Divisi</span><span>${esc(m.div)}</span></div>
-          <div class="kv"><span class="k">Akses</span><span>${LEVEL_LABEL[m.level]}</span></div>
-          <div class="kv"><span class="k">Periode</span><span class="num">2026 / 2027</span></div>
+          <div class="label" style="margin-bottom:8px">Profile</div>
+          <div class="kv"><span class="k">Name</span><span>${esc(m.name)}</span></div>
+          <div class="kv"><span class="k">Role</span><span>${esc(m.role)}</span></div>
+          <div class="kv"><span class="k">Division</span><span>${esc(m.div)}</span></div>
+          <div class="kv"><span class="k">Access</span><span>${LEVEL_LABEL[m.level]}</span></div>
+          <div class="kv"><span class="k">Term</span><span class="num">2026 / 2027</span></div>
         </div>
         <div class="pane">
-          <div class="label" style="margin-bottom:8px">Tugas Divisi</div>
+          <div class="label" style="margin-bottom:8px">Division Tasks</div>
           ${myTasks.length ? `<div class="kan">${myTasks.map(t => taskRow(div.id, mid, t)).join("")}</div>`
-            : `<div class="meta">Belum ada tugas divisi tercatat.</div>`}
+            : `<div class="meta">No division tasks recorded.</div>`}
           ${div ? addTaskForm(div.id, mid) : ""}
         </div>
       </div>
       <div>
-        <div class="label" style="margin-bottom:9px">Program yang Menjadi Tanggung Jawab (PIC)</div>
+        <div class="label" style="margin-bottom:9px">Programs They Lead (PIC)</div>
         ${mine.length ? `<div class="stack">${mine.map(p => {
           const pr = progress(p);
           return `<button class="chk" data-open-prog="${p.id}" style="align-items:center">
@@ -861,7 +978,7 @@ function modalMember(mid) {
             ${tag(p.status)}
             <span style="color:var(--red);font-weight:700">&rsaquo;</span>
           </button>`;
-        }).join("")}</div>` : `<div class="empty">Belum terdaftar sebagai PIC program mana pun.</div>`}
+        }).join("")}</div>` : `<div class="empty">Not assigned as PIC on any program yet.</div>`}
       </div>
     </div>`;
 }
@@ -879,39 +996,33 @@ function viewNotification() {
         : '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'}</svg></span>
       <span style="flex:1">
         <span class="nt"><span class="trig${n.trig === "H-0" ? " h0" : ""}">${n.trig}</span>${n.text}</span>
-        <span class="nd">${fShort(n.fire)} · ${fTime(n.fire)} · ${un ? "belum dibaca" : "dibaca"}</span>
+        <span class="nd">${fShort(n.fire)} · ${fTime(n.fire)} · ${un ? "unread" : "read"}</span>
       </span>
     </button>`;
-  }).join("") || `<div class="empty">Belum ada notifikasi.</div>`;
+  }).join("") || `<div class="empty">No notifications yet.</div>`;
 
   return `<div class="sec-head" style="justify-content:space-between">
-      <div><div class="kick">Pengingat Otomatis</div><h1>Notification</h1>
-      <p class="sec-sub">Notifikasi dibangkitkan otomatis dari tanggal program dan tenggat checklist. Pemicu aktif: H-3, H-1, dan hari-H pukul 07.00.</p></div>
-      <button class="btn ghost" data-readall>Tandai semua dibaca</button>
+      <div><div class="kick">Automatic Reminders</div><h1>Notification</h1></div>
+      <button class="btn ghost" data-readall>Mark all as read</button>
     </div>
     <div class="rule"></div>
-    <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:20px">
-      <div class="pane"><div class="label">Aturan H-3</div><div class="meta" style="margin-top:5px">Pengingat awal persiapan program.</div></div>
-      <div class="pane" style="box-shadow:inset 0 0 0 1px var(--edge)"><div class="label" style="color:var(--red)">Aturan H-1 · wajib</div><div class="meta" style="margin-top:5px">“Rapat [nama] akan berlangsung besok, [tanggal] pukul [jam].”</div></div>
-      <div class="pane"><div class="label">Aturan H-0</div><div class="meta" style="margin-top:5px">Pengingat pagi di hari pelaksanaan.</div></div>
-      <div class="pane"><div class="label">Tenggat Checklist</div><div class="meta" style="margin-top:5px">H-1 sebelum tenggat, lalu status Overdue.</div></div>
-    </div>
+    ${pushPanel()}
     ${mailSection()}
-    <div class="label" style="margin-bottom:12px">Agenda &amp; Tenggat</div>
+    <div class="label" style="margin-bottom:12px">Agenda &amp; Deadlines</div>
     <div class="stack">${rows}</div>`;
 }
 
 function mailSection() {
   const unread = MAIL.messages.filter(m => m.unread);
   if (!unread.length) return "";
-  return `<div class="label" style="margin-bottom:12px">Email Masuk Belum Dibaca · ${unread.length}</div>
+  return `<div class="label" style="margin-bottom:12px">Unread Email · ${unread.length}</div>
     <div class="stack" style="margin-bottom:26px">${unread.map(m => {
       const d = new Date(m.date);
       return `<a class="nrow unread" href="${gmailLink("#inbox/" + m.id)}" target="_blank" rel="noopener">
         <span class="ni"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z"/><path d="M3 6l9 7 9-7"/></svg></span>
         <span style="flex:1">
-          <span class="nt"><span class="trig h0">EMAIL</span>Email baru dari <b>${esc(m.from)}</b> — ${esc(m.subject)}</span>
-          <span class="nd">${fShort(d)} · ${fTime(d)} · klik untuk membuka di Gmail</span>
+          <span class="nt"><span class="trig h0">EMAIL</span>New email from <b>${esc(m.from)}</b> — ${esc(m.subject)}</span>
+          <span class="nd">${fShort(d)} · ${fTime(d)} · click to open in Gmail</span>
         </span>
       </a>`;
     }).join("")}</div>`;
@@ -922,7 +1033,7 @@ let roomTab = null;
 
 function viewMinutes() {
   const rooms = myRooms();
-  if (!rooms.length) return `<div class="empty">Belum ada ruang rapat untuk akunmu.</div>`;
+  if (!rooms.length) return `<div class="empty">No meeting rooms available for your account.</div>`;
   if (!rooms.includes(roomTab)) roomTab = rooms[0];
 
   const now = new Date();
@@ -937,8 +1048,8 @@ function viewMinutes() {
     const ada = m.notes.trim().length > 0;
     return `<button class="card click" data-minute="${m.id}">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-        ${akan ? `<span class="tag t-ongoing"><i class="dot pulse"></i>Akan Datang</span>`
-               : `<span class="tag ${ada ? "t-completed" : "t-soon"}">${ada ? "Sudah Dinotulenkan" : "Belum Dinotulenkan"}</span>`}
+        ${akan ? `<span class="tag t-ongoing"><i class="dot pulse"></i>Upcoming</span>`
+               : `<span class="tag ${ada ? "t-completed" : "t-soon"}">${ada ? "Minutes Recorded" : "No Minutes Yet"}</span>`}
         <span class="meta num">${fShort(m.held)}</span>
       </div>
       <h3 style="margin:11px 0 6px">${esc(m.title)}</h3>
@@ -946,13 +1057,13 @@ function viewMinutes() {
       ${countdown(m.held)}
     </button>`;
   }).join("") || `<div class="empty">${meetingsReady
-      ? "Belum ada rapat di ruang ini."
-      : "Tabel rapat belum dibuat. Jalankan db/06_notulen.sql di Supabase."}</div>`;
+      ? "No meetings in this room yet."
+      : "The meetings table has not been created. Run db/06_notulen.sql in Supabase."}</div>`;
 
   return `<div class="sec-head" style="justify-content:space-between">
-      <div><div class="kick">Jadwal &amp; Notulen</div><h1>Meeting</h1>
-      <p class="sec-sub">Jadwal rapat tiap ruang beserta hitung mundurnya. Klik satu kartu untuk membaca atau menulis notulennya.</p></div>
-      ${meetingsReady ? `<button class="btn" data-newminute>+ Jadwalkan Rapat</button>` : ""}
+      <div><div class="kick">Schedule &amp; Minutes</div><h1>Meeting</h1>
+      <p class="sec-sub">Meeting schedules per room, each with its own countdown.</p></div>
+      ${meetingsReady ? `<button class="btn" data-newminute>+ Schedule Meeting</button>` : ""}
     </div>
     <div class="rule"></div>
     <div class="tabs">
@@ -966,22 +1077,22 @@ function viewMinutes() {
 
 function modalMinute(id) {
   const m = MEETINGS.find(x => x.id === id);
-  if (!m) return `<div class="modal-body"><div class="empty">Rapat tidak ditemukan.</div></div>`;
+  if (!m) return `<div class="modal-body"><div class="empty">Meeting not found.</div></div>`;
   const akan = m.held >= new Date();
   const bisa = canWriteMinute(m);
 
   const isi = bisa
     ? `<form data-noteform="${m.id}">
          <textarea class="ainput notulen-edit" name="notes" rows="14"
-           placeholder="1. Pembahasan...&#10;2. Keputusan...&#10;3. Tindak lanjut...">${esc(m.notes)}</textarea>
+           placeholder="1. Discussion...&#10;2. Decisions...&#10;3. Follow-up...">${esc(m.notes)}</textarea>
          <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:11px;align-items:center">
-           <button class="btn" type="submit">Simpan Notulen</button>
+           <button class="btn" type="submit">Save Minutes</button>
            <span class="meta">${m.notes.trim()
-             ? `Terakhir diperbarui ${fShort(new Date(m.updated_at))} ${fTime(new Date(m.updated_at))}`
-             : akan ? "Boleh diisi setelah rapat berlangsung." : "Belum pernah diisi."}</span>
+             ? `Last updated ${fShort(new Date(m.updated_at))} ${fTime(new Date(m.updated_at))}`
+             : akan ? "Can be filled in once the meeting has taken place." : "Never filled in."}</span>
          </div>
        </form>`
-    : `<div class="notulen">${esc(m.notes) || '<span class="meta">Notulen belum diisi.</span>'}</div>`;
+    : `<div class="notulen">${esc(m.notes) || '<span class="meta">No minutes yet.</span>'}</div>`;
 
   return `<div class="modal-head"><div class="dots"></div>
       <div style="position:relative">
@@ -990,13 +1101,13 @@ function modalMinute(id) {
         <div class="meta">${DW[m.held.getDay()]}, ${fDate(m.held)} · ${fTime(m.held)} WIB${m.place ? " · " + esc(m.place) : ""}</div>
         <div style="margin-top:14px">${countdown(m.held)}</div>
         ${bisa ? `<div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap">
-          <button class="btn ghost sm" data-editminute="${m.id}">Ubah Jadwal</button>
-          <button class="btn ghost sm" data-minutedel="${m.id}">Hapus</button>
+          <button class="btn ghost sm" data-editminute="${m.id}">Edit Schedule</button>
+          <button class="btn ghost sm" data-minutedel="${m.id}">Delete</button>
         </div>` : ""}
       </div></div>
     <div class="modal-body">
       <div>
-        <div class="label" style="margin-bottom:9px">Notulen</div>
+        <div class="label" style="margin-bottom:9px">Minutes</div>
         ${isi}
       </div>
     </div>`;
@@ -1007,11 +1118,11 @@ async function saveNotes(id, f) {
   btn.disabled = true;
   const { error } = await sb.from("meetings").update({ notes: f.notes.value }).eq("id", id);
   btn.disabled = false;
-  if (error) return fail(error, "Gagal menyimpan notulen");
+  if (error) return fail(error, "Could not save the minutes");
   await loadAll();
   showModal("minute", id);
   render();
-  toast("Notulen tersimpan.");
+  toast("Minutes saved.");
 }
 
 function modalMinuteForm(id) {
@@ -1021,31 +1132,31 @@ function modalMinuteForm(id) {
 
   return `<div class="modal-head"><div class="dots"></div>
       <div style="position:relative">
-        <div class="kick">${m ? "Ubah Rapat" : "Rapat Baru"}</div>
-        <h2 style="margin:8px 0 4px">${m ? esc(m.title) : "Jadwalkan Rapat"}</h2>
-        <div class="meta">Notulennya ditulis nanti lewat kartu rapat ini. Hanya terbaca oleh anggota ruang yang dipilih.</div>
+        <div class="kick">${m ? "Edit Meeting" : "New Meeting"}</div>
+        <h2 style="margin:8px 0 4px">${m ? esc(m.title) : "Schedule a Meeting"}</h2>
+        <div class="meta">Minutes are written later from this meeting card. Only members of the chosen room can read it.</div>
       </div></div>
     <div class="modal-body">
       <form class="aform" data-minuteform="${m ? m.id : ""}">
         <div class="cols" style="gap:13px">
-          <label class="afield"><span class="label">Ruang rapat</span>
+          <label class="afield"><span class="label">Meeting room</span>
             <select class="ainput" name="room">
               ${rooms.map(r => `<option value="${r}"${(m ? m.room : roomTab) === r ? " selected" : ""}>${esc(room(r).label)}</option>`).join("")}
             </select></label>
-          <label class="afield"><span class="label">Tanggal</span>
+          <label class="afield"><span class="label">Date</span>
             <input class="ainput" type="date" name="tgl" value="${dInput(d)}" required></label>
-          <label class="afield"><span class="label">Jam</span>
+          <label class="afield"><span class="label">Time</span>
             <input class="ainput" type="time" name="jam" value="${tInput(d)}" required></label>
         </div>
 
-        <label class="afield"><span class="label">Judul rapat</span>
-          <input class="ainput" name="title" value="${m ? esc(m.title) : ""}" placeholder="Rapat koordinasi persiapan Labshow" required></label>
+        <label class="afield"><span class="label">Meeting title</span>
+          <input class="ainput" name="title" value="${m ? esc(m.title) : ""}" placeholder="Labshow preparation coordination meeting" required></label>
 
-        <label class="afield"><span class="label">Tempat</span>
-          <input class="ainput" name="place" value="${m ? esc(m.place) : ""}" placeholder="Ruang Lab / Daring"></label>
+        <label class="afield"><span class="label">Venue</span>
+          <input class="ainput" name="place" value="${m ? esc(m.place) : ""}" placeholder="Lab Room / Online"></label>
 
         <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:6px">
-          <button class="btn" type="submit">${m ? "Simpan Perubahan" : "Jadwalkan"}</button>
+          <button class="btn" type="submit">${m ? "Save Changes" : "Schedule"}</button>
         </div>
       </form>
     </div>`;
@@ -1053,9 +1164,9 @@ function modalMinuteForm(id) {
 
 async function saveMinute(id, f) {
   const held = new Date(`${f.tgl.value}T${f.jam.value || "19:00"}`);
-  if (isNaN(held)) return toast("Tanggal atau jam belum benar.", true);
+  if (isNaN(held)) return toast("Date or time is not valid.", true);
   const title = f.title.value.trim();
-  if (!title) return toast("Judul rapat belum diisi.", true);
+  if (!title) return toast("Meeting title is empty.", true);
 
   const body = {
     room: f.room.value, title, held_at: held.toISOString(),
@@ -1069,24 +1180,24 @@ async function saveMinute(id, f) {
     ? await sb.from("meetings").update(body).eq("id", id).select().single()
     : await sb.from("meetings").insert({ ...body, created_by: ME.user.id }).select().single();
 
-  if (res.error) { btn.disabled = false; return fail(res.error, "Gagal menyimpan notulen"); }
+  if (res.error) { btn.disabled = false; return fail(res.error, "Could not save the meeting"); }
 
   await loadAll();
   roomTab = body.room;
   showModal("minute", res.data.id);
   render();
-  toast(id ? "Rapat diperbarui." : "Rapat tersimpan.");
+  toast(id ? "Meeting updated." : "Meeting saved.");
 }
 
 async function deleteMinute(id) {
   const m = MEETINGS.find(x => x.id === id);
-  if (!confirm(`Hapus rapat "${m.title}" beserta notulennya? Tindakan ini tidak bisa dibatalkan.`)) return;
+  if (!confirm(`Delete the meeting "${m.title}" and its minutes? This cannot be undone.`)) return;
   const { error } = await sb.from("meetings").delete().eq("id", id);
-  if (error) return fail(error, "Gagal menghapus notulen");
+  if (error) return fail(error, "Could not delete the meeting");
   closeModal();
   await loadAll();
   render();
-  toast("Rapat dihapus.");
+  toast("Meeting deleted.");
 }
 
 /* ---------------------------------------------------------------- INBOX */
@@ -1098,31 +1209,31 @@ function gmailLink(after) {
 }
 
 function viewInbox() {
-  if (!isLab()) return `<div class="empty">Halaman ini hanya untuk akun lab.</div>`;
+  if (!isLab()) return `<div class="empty">This page is for the lab account only.</div>`;
   const unread = unreadMail();
   let body;
 
   if (MAIL.loading && !MAIL.loaded) {
-    body = `<div class="empty">Memuat kotak masuk…</div>`;
+    body = `<div class="empty">Loading inbox…</div>`;
   } else if (!MAIL.configured) {
     body = `<div class="note">
-      <b style="color:#fff">Integrasi Gmail belum aktif.</b><br>
-      ${esc(MAIL.error || "Edge function gmail-inbox belum dipasang.")}
-      Sementara ini pakai tombol <b>Buka Kotak Masuk</b> di atas. Langkah pemasangannya ada di README, bagian “Integrasi Gmail”.
+      <b style="color:#fff">Gmail integration is not active.</b><br>
+      ${esc(MAIL.error || "The gmail-inbox edge function is not installed.")}
+      Use the <b>Open Inbox</b> button above in the meantime. Setup steps are in the README, under “Gmail integration”.
     </div>`;
   } else if (MAIL.error) {
     body = `<div class="note" style="border-left-color:var(--red)">
-      <b style="color:#fff">Gagal mengambil email.</b><br>${esc(MAIL.error)}
+      <b style="color:#fff">Could not fetch email.</b><br>${esc(MAIL.error)}
     </div>`;
   } else if (!MAIL.messages.length) {
-    body = `<div class="empty">Kotak masuk kosong.</div>`;
+    body = `<div class="empty">The inbox is empty.</div>`;
   } else {
     body = `<div class="stack">${MAIL.messages.map(m => {
       const d = new Date(m.date), now = new Date();
       const hariIni = key(d) === key(now);
       const waktu = hariIni ? fTime(d) : fShort(d);
       return `<a class="mailrow${m.unread ? " unread" : ""}" href="${gmailLink("#inbox/" + m.id)}"
-              target="_blank" rel="noopener" title="Buka di Gmail">
+              target="_blank" rel="noopener" title="Open in Gmail">
         <span class="av-s" style="margin:0">${ini(m.from)}</span>
         <span style="min-width:0">
           <span class="sub">${m.unread ? '<i class="dot pulse"></i>' : ""}${esc(m.subject)}</span>
@@ -1133,26 +1244,26 @@ function viewInbox() {
     }).join("")}</div>`;
   }
 
-  return `<div class="sec-head"><div><div class="kick">Surel Resmi Laboratorium</div><h1>Inbox</h1></div></div>
+  return `<div class="sec-head"><div><div class="kick">Official Lab Mailbox</div><h1>Inbox</h1></div></div>
     <div class="rule"></div>
 
     <div class="mailbox">
       <svg class="fp" aria-hidden="true"><use href="#ic-fp"/></svg>
       <div class="dots"></div>
       <div style="position:relative;flex:1;min-width:230px">
-        <div class="label">Akun Laboratorium</div>
+        <div class="label">Laboratory Account</div>
         <div class="mailaddr">${esc(LAB_EMAIL)}</div>
-        <button class="linkish" data-copy="${esc(LAB_EMAIL)}">Salin alamat</button>
+        <button class="linkish" data-copy="${esc(LAB_EMAIL)}">Copy address</button>
       </div>
       <div style="position:relative;display:flex;gap:9px;flex-wrap:wrap">
-        <a class="btn" href="${gmailLink("#inbox")}" target="_blank" rel="noopener">Buka Kotak Masuk &nearr;</a>
-        <a class="btn ghost" href="${gmailLink("#inbox?compose=new")}" target="_blank" rel="noopener">Tulis Email &nearr;</a>
+        <a class="btn" href="${gmailLink("#inbox")}" target="_blank" rel="noopener">Open Inbox &nearr;</a>
+        <a class="btn ghost" href="${gmailLink("#inbox?compose=new")}" target="_blank" rel="noopener">Compose &nearr;</a>
       </div>
     </div>
 
     <div class="sec-head" style="justify-content:space-between;margin-top:26px">
-      <div class="label">Email Terbaru${unread ? ` · <span style="color:var(--red)">${unread} belum dibaca</span>` : ""}</div>
-      <button class="btn ghost sm" data-mailrefresh${MAIL.loading ? " disabled" : ""}>${MAIL.loading ? "Memuat…" : "Muat ulang"}</button>
+      <div class="label">Recent Email${unread ? ` · <span style="color:var(--red)">${unread} unread</span>` : ""}</div>
+      <button class="btn ghost sm" data-mailrefresh${MAIL.loading ? " disabled" : ""}>${MAIL.loading ? "Loading…" : "Refresh"}</button>
     </div>
     <div class="rule" style="margin:10px 0 14px"></div>
     ${body}`;
@@ -1172,8 +1283,8 @@ async function loadMail(force) {
   MAIL.loaded = true;
   if (error) {
     MAIL.error = /not found|404/i.test(error.message || "")
-      ? "Edge function gmail-inbox belum di-deploy."
-      : (error.message || "Gagal menghubungi server email.");
+      ? "The gmail-inbox edge function has not been deployed."
+      : (error.message || "Could not reach the mail server.");
     MAIL.configured = false;
     MAIL.messages = [];
   } else {
@@ -1189,7 +1300,7 @@ let PENDING = [], ACTIVE = [], REJECTED = [];
 async function loadProfiles() {
   if (!isLab()) return;
   const { data, error } = await sb.from("profiles").select("*").order("created_at");
-  if (error) return fail(error, "Gagal memuat daftar akun");
+  if (error) return fail(error, "Could not load the account list");
   PENDING  = data.filter(p => p.status === "pending");
   ACTIVE   = data.filter(p => p.status === "approved");
   REJECTED = data.filter(p => p.status === "rejected");
@@ -1205,21 +1316,21 @@ function viewApproval() {
     const at = new Date(a.created_at);
     return `<div class="card" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
       <div style="flex:1;min-width:210px">
-        ${bentrok ? `<span class="tag t-over" style="margin-bottom:8px">${dupes[a.member_id]} orang mengklaim nama ini</span>` : ""}
+        ${bentrok ? `<span class="tag t-over" style="margin-bottom:8px">${dupes[a.member_id]} people claim this name</span>` : ""}
         <div class="kv"><span class="k">Email</span><span>${esc(a.email)}</span></div>
-        <div class="kv"><span class="k">Mengaku</span><span style="color:#fff">${esc(m?.name || a.member_id)}</span></div>
-        <div class="kv"><span class="k">Jabatan</span><span>${esc(m?.role || "-")} · ${esc(m?.div || "-")}</span></div>
-        <div class="kv"><span class="k">Dikirim</span><span class="num">${fShort(at)} ${fTime(at)}</span></div>
+        <div class="kv"><span class="k">Claims to be</span><span style="color:#fff">${esc(m?.name || a.member_id)}</span></div>
+        <div class="kv"><span class="k">Role</span><span>${esc(m?.role || "-")} · ${esc(m?.div || "-")}</span></div>
+        <div class="kv"><span class="k">Sent</span><span class="num">${fShort(at)} ${fTime(at)}</span></div>
       </div>
       <div style="flex:0 0 240px;display:flex;flex-direction:column;gap:8px">
-        <input class="ainput" id="rsn-${a.user_id}" placeholder="Alasan penolakan (opsional)">
+        <input class="ainput" id="rsn-${a.user_id}" placeholder="Reason for rejection (optional)">
         <div style="display:flex;gap:8px">
-          <button class="btn sm" data-appr="ok|${a.user_id}" style="flex:1;justify-content:center">Setujui</button>
-          <button class="btn ghost sm" data-appr="no|${a.user_id}" style="flex:1;justify-content:center">Tolak</button>
+          <button class="btn sm" data-appr="ok|${a.user_id}" style="flex:1;justify-content:center">Approve</button>
+          <button class="btn ghost sm" data-appr="no|${a.user_id}" style="flex:1;justify-content:center">Reject</button>
         </div>
       </div>
     </div>`;
-  }).join("") || `<div class="empty">Tidak ada pendaftaran yang menunggu.</div>`;
+  }).join("") || `<div class="empty">No registrations waiting.</div>`;
 
   const active = ACTIVE.map(a => {
     const m = byId(a.member_id);
@@ -1227,31 +1338,31 @@ function viewApproval() {
       <span class="av-s" style="margin:0">${ini(m?.name || "?")}</span>
       <span style="min-width:0"><span class="sub">${esc(m?.name || a.member_id)}</span><span class="snip">${esc(a.email)}</span></span>
       <span class="tag ${m?.level === "inti" ? "t-ongoing" : "t-soon"}">${LEVEL_LABEL[m?.level || "staff"]}</span>
-      <button class="btn ghost sm" data-appr="cabut|${a.user_id}">Cabut</button>
+      <button class="btn ghost sm" data-appr="cabut|${a.user_id}">Revoke</button>
     </div>`;
-  }).join("") || `<div class="empty">Belum ada akun aktif.</div>`;
+  }).join("") || `<div class="empty">No active accounts yet.</div>`;
 
   const claimed = new Set(ACTIVE.map(a => a.member_id));
   const belum = MEMBERS.filter(m => !claimed.has(m.id));
 
-  return `<div class="sec-head"><div><div class="kick">Khusus ${esc(LAB_EMAIL)}</div><h1>Approval</h1>
-      <p class="sec-sub">Setujui atau tolak pendaftaran akun. Email baru resmi menempel ke nama pengurus setelah disetujui di sini.</p></div></div>
+  return `<div class="sec-head"><div><div class="kick">Restricted to ${esc(LAB_EMAIL)}</div><h1>Approval</h1>
+      <p class="sec-sub">Approve or reject account registrations. An email only binds to a member's name once approved here.</p></div></div>
     <div class="rule"></div>
     <div class="grid g-sum" style="margin-bottom:24px">
-      ${stat("Menunggu Persetujuan", PENDING.length, PENDING.length ? "red" : "", "pendaftaran masuk")}
-      ${stat("Akun Aktif", ACTIVE.length, "ok", "sudah bisa login")}
-      ${stat("Nama Belum Diklaim", belum.length, "", "dari " + MEMBERS.length + " pengurus")}
+      ${stat("Awaiting Approval", PENDING.length, PENDING.length ? "red" : "", "registrations received")}
+      ${stat("Active Accounts", ACTIVE.length, "ok", "able to sign in")}
+      ${stat("Unclaimed Names", belum.length, "", "of " + MEMBERS.length + " members")}
     </div>
-    <div class="label" style="margin-bottom:12px">Antrean Pendaftaran</div>
+    <div class="label" style="margin-bottom:12px">Registration Queue</div>
     <div class="stack" style="gap:12px;margin-bottom:30px">${queue}</div>
-    <div class="label" style="margin-bottom:12px">Akun Aktif</div>
+    <div class="label" style="margin-bottom:12px">Active Accounts</div>
     <div class="stack" style="margin-bottom:30px">${active}</div>
     ${rejectedSection()}`;
 }
 
 function rejectedSection() {
   if (!REJECTED.length) return "";
-  return `<div class="label" style="margin-bottom:12px">Pendaftaran Ditolak · ${REJECTED.length}</div>
+  return `<div class="label" style="margin-bottom:12px">Rejected Registrations · ${REJECTED.length}</div>
     <div class="stack">${REJECTED.map(a => {
       const m = byId(a.member_id);
       return `<div class="mailrow" style="grid-template-columns:30px minmax(0,1fr) auto auto;gap:12px;align-items:center">
@@ -1260,11 +1371,11 @@ function rejectedSection() {
           <span class="sub" style="color:var(--dim)">${esc(m?.name || a.member_id)}</span>
           <span class="snip">${esc(a.email)}${a.reason ? " — " + esc(a.reason) : ""}</span>
         </span>
-        <button class="btn sm" data-appr="ok|${a.user_id}">Setujui</button>
-        <button class="btn ghost sm" data-appr="reset|${a.user_id}">Buka lagi</button>
+        <button class="btn sm" data-appr="ok|${a.user_id}">Approve</button>
+        <button class="btn ghost sm" data-appr="reset|${a.user_id}">Reopen</button>
       </div>`;
     }).join("")}</div>
-    <div class="meta" style="margin-top:10px">“Buka lagi” menghapus catatan penolakan, sehingga orangnya dapat memilih nama lagi saat masuk berikutnya.</div>`;
+    <div class="meta" style="margin-top:10px">“Reopen” clears the rejection so the person can pick a name again on their next sign-in.</div>`;
 }
 
 async function decide(act, uid) {
@@ -1272,12 +1383,12 @@ async function decide(act, uid) {
   if (!row) return;
   if (act === "cabut" || act === "reset") {
     const pesan = act === "cabut"
-      ? `Cabut akses ${row.email}? Namanya bisa diklaim ulang setelah ini.`
-      : `Buka kembali pendaftaran ${row.email}? Dia akan diminta memilih nama lagi saat masuk.`;
+      ? `Revoke access for ${row.email}? Their name becomes claimable again.`
+      : `Reopen the registration for ${row.email}? They will be asked to pick a name again on sign-in.`;
     if (!confirm(pesan)) return;
     const { error } = await sb.from("profiles").delete().eq("user_id", uid);
-    if (error) return fail(error, "Gagal menghapus catatan akun");
-    toast(act === "cabut" ? `Akses ${row.email} dicabut.` : `Pendaftaran ${row.email} dibuka lagi.`);
+    if (error) return fail(error, "Could not remove the account record");
+    toast(act === "cabut" ? `Access revoked for ${row.email}.` : `Registration reopened for ${row.email}.`);
     await loadProfiles(); render(); return;
   }
   if (act === "ok") {
@@ -1287,18 +1398,18 @@ async function decide(act, uid) {
     if (error) {
       const bentrok = error.code === "23505" || /duplicate key/i.test(error.message || "");
       return toast(bentrok
-        ? `${byId(row.member_id)?.name || "Nama itu"} sudah dipegang akun lain. Cabut akses yang lama dulu di daftar Akun Aktif.`
-        : (error.message || "Gagal menyetujui"), true);
+        ? `${byId(row.member_id)?.name || "That name"} is already held by another account. Revoke the old one under Active Accounts first.`
+        : (error.message || "Could not approve"), true);
     }
-    toast(`${byId(row.member_id)?.name || row.email} disetujui.`);
+    toast(`${byId(row.member_id)?.name || row.email} approved.`);
   } else {
     const r = document.getElementById("rsn-" + uid);
     const { error } = await sb.from("profiles").update({
       status: "rejected", reason: r?.value.trim() || null,
       decided_at: new Date().toISOString(), decided_by: ME.user.id,
     }).eq("user_id", uid);
-    if (error) return fail(error, "Gagal menolak");
-    toast(`Pendaftaran ${row.email} ditolak.`);
+    if (error) return fail(error, "Could not reject");
+    toast(`Registration for ${row.email} rejected.`);
   }
   await loadProfiles();
   render();
@@ -1308,7 +1419,7 @@ async function decide(act, uid) {
 function paintUser() {
   const el = $("#me");
   if (!el || !ME) return;
-  const nama = ME.isLab ? "Akun Lab" : ME.member.name;
+  const nama = ME.isLab ? "Lab Account" : ME.member.name;
   const sub  = ME.isLab ? "Administrator" : ME.member.role;
   const inis = ME.isLab ? "FL" : ini(ME.member.name);
   const pend = isLab() ? PENDING.length : 0;
@@ -1317,8 +1428,8 @@ function paintUser() {
       <div class="mn">${esc(nama)}</div>
       <div class="mr">${esc(sub)}</div>
     </div>
-    ${pend ? `<span class="tag t-over" style="margin-left:4px">${pend} menunggu</span>` : ""}
-    <button class="logout" id="logout" title="Keluar" aria-label="Keluar">
+    ${pend ? `<span class="tag t-over" style="margin-left:4px">${pend} waiting</span>` : ""}
+    <button class="logout" id="logout" title="Sign out" aria-label="Sign out">
       <svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>
     </button>`;
   $("#logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
@@ -1347,12 +1458,13 @@ function render() {
 
 /* ---------------------------------------------------------------- interaksi */
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel]");
+  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push]");
   if (!t) return;
   const d = t.dataset;
 
   if (d.auth) { const [act, arg] = d.auth.split("|"); return authAction(act, arg); }
   if (d.appr) { const [act, uid] = d.appr.split("|"); return decide(act, uid); }
+  if (d.push) return d.push === "on" ? enablePush() : disablePush();
   if (d.room) { roomTab = d.room; return render(); }
   if (d.minute) return showModal("minute", d.minute);
   if (d.newminute !== undefined) return showModal("mform", "");
@@ -1364,7 +1476,7 @@ document.addEventListener("click", e => {
   if (d.mailrefresh !== undefined) return loadMail(true);
   if (d.copy !== undefined) {
     navigator.clipboard?.writeText(d.copy)
-      .then(() => toast("Alamat email disalin."), () => toast("Browser menolak menyalin.", true));
+      .then(() => toast("Email address copied."), () => toast("The browser refused to copy.", true));
     return;
   }
   if (d.go) return go(d.go);
@@ -1415,13 +1527,13 @@ function wireChrome() {
       ...PROGRAMS.filter(p => p.title.toLowerCase().includes(v) || p.desc.toLowerCase().includes(v))
         .map(p => ({ k: "Program", n: p.title, a: `data-open-prog="${p.id}"` })),
       ...MEMBERS.filter(m => m.name.toLowerCase().includes(v) || m.role.toLowerCase().includes(v))
-        .map(m => ({ k: "Anggota", n: `${m.name} — ${m.role}`, a: `data-open-member="${m.id}"` })),
+        .map(m => ({ k: "Member", n: `${m.name} — ${m.role}`, a: `data-open-member="${m.id}"` })),
       ...DIVISIONS.filter(x => x.name.toLowerCase().includes(v))
-        .map(x => ({ k: "Divisi", n: x.name, a: `data-open-div="${x.id}"` })),
+        .map(x => ({ k: "Division", n: x.name, a: `data-open-div="${x.id}"` })),
     ].slice(0, 12);
     resEl.innerHTML = hits.length
       ? hits.map(h => `<button ${h.a}><span class="k">${h.k}</span><br>${esc(h.n)}</button>`).join("")
-      : `<div style="padding:12px;color:var(--dim);font-size:12px">Tidak ada hasil untuk “${esc(qEl.value)}”.</div>`;
+      : `<div style="padding:12px;color:var(--dim);font-size:12px">No results for “${esc(qEl.value)}”.</div>`;
     resEl.hidden = false;
   });
   document.addEventListener("click", ev => { if (!ev.target.closest(".search")) resEl.hidden = true; });
@@ -1433,7 +1545,7 @@ function wireChrome() {
   function setRail(on) {
     shellEl.classList.toggle("rail", on);
     railBtn.setAttribute("aria-expanded", String(!on));
-    railBtn.title = on ? "Tampilkan menu" : "Sembunyikan menu";
+    railBtn.title = on ? "Expand menu" : "Collapse menu";
     try { localStorage.setItem(RKEY, on ? "1" : "0"); } catch (e) {}
   }
   railBtn.addEventListener("click", () => setRail(!shellEl.classList.contains("rail")));
@@ -1461,7 +1573,7 @@ function subscribeRealtime() {
     .on("postgres_changes", { event: "*", schema: "public", table: "meetings" }, bump)
     .subscribe(st => {
       const el = $("#sync");
-      if (el) el.textContent = st === "SUBSCRIBED" ? "SINKRON · REALTIME" : "SINKRON · BERKALA";
+      if (el) el.textContent = st === "SUBSCRIBED" ? "SYNCED · REALTIME" : "SYNCED · POLLING";
     });
 }
 
@@ -1494,37 +1606,37 @@ async function claimableMembers() {
 
 async function viewLogin() {
   return authShell(`
-    <h2 style="margin-bottom:4px">Masuk</h2>
-    <p class="meta" style="margin-bottom:18px">Gunakan email yang sudah disetujui akun lab.</p>
+    <h2 style="margin-bottom:4px">Sign In</h2>
+    <p class="meta" style="margin-bottom:18px">Use an email address the lab account has approved.</p>
     <form class="aform" id="loginForm">
       <label class="afield"><span class="label">Email</span>
-        <input id="li-email" type="email" autocomplete="username" placeholder="nama@email.com" required></label>
-      <label class="afield"><span class="label">Password akun web</span>
+        <input id="li-email" type="email" autocomplete="username" placeholder="name@email.com" required></label>
+      <label class="afield"><span class="label">Web account password</span>
         <input id="li-pass" type="password" autocomplete="current-password" placeholder="••••••••" required></label>
-      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Masuk</button>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Sign In</button>
     </form>
-    <div class="aalt">Belum punya akun? <button data-auth="register">Daftar di sini</button></div>`);
+    <div class="aalt">No account yet? <button data-auth="register">Register here</button></div>`);
 }
 
 async function viewRegister() {
   const mem = await claimableMembers();
   const opts = mem.map(m => `<option value="${m.id}">${esc(m.name)} — ${esc(m.role)}</option>`).join("");
   return authShell(`
-    <h2 style="margin-bottom:4px">Daftar Akun</h2>
-    <p class="meta" style="margin-bottom:18px">Daftarkan email, lalu pilih namamu dari daftar pengurus supaya akun ini menempel ke datamu.</p>
+    <h2 style="margin-bottom:4px">Register</h2>
+    <p class="meta" style="margin-bottom:18px">Register your email, then pick your name from the committee list so the account binds to your record.</p>
     <form class="aform" id="regForm">
       <label class="afield"><span class="label">Email</span>
-        <input id="rg-email" type="email" autocomplete="username" placeholder="nama@email.com" required></label>
-      <label class="afield"><span class="label">Password akun web</span>
-        <input id="rg-pass" type="password" autocomplete="new-password" placeholder="minimal 8 karakter" required></label>
-      <label class="afield"><span class="label">Ulangi password</span>
+        <input id="rg-email" type="email" autocomplete="username" placeholder="name@email.com" required></label>
+      <label class="afield"><span class="label">Web account password</span>
+        <input id="rg-pass" type="password" autocomplete="new-password" placeholder="at least 8 characters" required></label>
+      <label class="afield"><span class="label">Repeat password</span>
         <input id="rg-pass2" type="password" autocomplete="new-password" placeholder="••••••••" required></label>
-      <label class="afield"><span class="label">Nama kamu</span>
-        <select id="rg-member" required><option value="">— pilih nama —</option>${opts}</select></label>
-      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Kirim Pendaftaran</button>
+      <label class="afield"><span class="label">Your name</span>
+        <select id="rg-member" required><option value="">— choose your name —</option>${opts}</select></label>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Submit Registration</button>
     </form>
-    <div class="ahint"><b>Password ini password akun web Foresty Management</b>, bukan password Gmail kamu. Jangan pernah memasukkan password Gmail di halaman mana pun.</div>
-    <div class="aalt">Sudah punya akun? <button data-auth="login">Masuk</button></div>`);
+    <div class="ahint"><b>This is your Foresty Management password</b>, not your Gmail password. Never enter a Gmail password on any page here.</div>
+    <div class="aalt">Already registered? <button data-auth="login">Sign in</button></div>`);
 }
 
 /* akun sudah ada di Auth tapi belum memilih nama */
@@ -1532,14 +1644,14 @@ async function viewClaim() {
   const mem = await claimableMembers();
   const opts = mem.map(m => `<option value="${m.id}">${esc(m.name)} — ${esc(m.role)}</option>`).join("");
   return authShell(`
-    <h2 style="margin-bottom:4px">Lengkapi Pendaftaran</h2>
-    <p class="meta" style="margin-bottom:18px">Email <b style="color:#fff">${esc(authCtx?.email || "")}</b> sudah terdaftar, tinggal pilih namamu.</p>
+    <h2 style="margin-bottom:4px">Complete Registration</h2>
+    <p class="meta" style="margin-bottom:18px">The address <b style="color:#fff">${esc(authCtx?.email || "")}</b> is registered — just pick your name.</p>
     <form class="aform" id="claimForm">
-      <label class="afield"><span class="label">Nama kamu</span>
-        <select id="cl-member" required><option value="">— pilih nama —</option>${opts}</select></label>
-      <button class="btn" type="submit" style="width:100%;justify-content:center">Kirim Pendaftaran</button>
+      <label class="afield"><span class="label">Your name</span>
+        <select id="cl-member" required><option value="">— choose your name —</option>${opts}</select></label>
+      <button class="btn" type="submit" style="width:100%;justify-content:center">Submit Registration</button>
     </form>
-    <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:10px">Keluar</button>`);
+    <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:10px">Sign out</button>`);
 }
 
 async function viewPending() {
@@ -1547,27 +1659,27 @@ async function viewPending() {
   const at = new Date(p.created_at);
   return authShell(`
     <div class="await-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-    <h2 style="margin-bottom:4px">Menunggu Persetujuan</h2>
-    <p class="meta" style="margin-bottom:18px">Pendaftaran sudah terkirim. Akun lab perlu menyetujui dulu sebelum kamu bisa masuk.</p>
+    <h2 style="margin-bottom:4px">Awaiting Approval</h2>
+    <p class="meta" style="margin-bottom:18px">Your registration has been sent. The lab account must approve it before you can sign in.</p>
     <div class="pane" style="margin-bottom:16px">
       <div class="kv"><span class="k">Email</span><span>${esc(p.email)}</span></div>
-      <div class="kv"><span class="k">Nama</span><span>${esc(m?.name || p.member_id)}</span></div>
-      <div class="kv"><span class="k">Jabatan</span><span>${esc(m?.role || "-")}</span></div>
-      <div class="kv"><span class="k">Dikirim</span><span class="num">${fShort(at)} ${fTime(at)}</span></div>
-      <div class="kv"><span class="k">Status</span><span style="color:var(--warn)">Menunggu ACC ${esc(LAB_EMAIL)}</span></div>
+      <div class="kv"><span class="k">Name</span><span>${esc(m?.name || p.member_id)}</span></div>
+      <div class="kv"><span class="k">Role</span><span>${esc(m?.role || "-")}</span></div>
+      <div class="kv"><span class="k">Sent</span><span class="num">${fShort(at)} ${fTime(at)}</span></div>
+      <div class="kv"><span class="k">Status</span><span style="color:var(--warn)">Waiting on ${esc(LAB_EMAIL)}</span></div>
     </div>
-    <button class="btn ghost" data-auth="refresh" style="width:100%;justify-content:center">Cek status lagi</button>
-    <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:8px">Keluar</button>`);
+    <button class="btn ghost" data-auth="refresh" style="width:100%;justify-content:center">Check again</button>
+    <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:8px">Sign out</button>`);
 }
 
 async function viewRejected() {
   const p = authCtx, m = byId(p.member_id) || (await claimableMembers()).find(x => x.id === p.member_id);
   return authShell(`
     <div class="await-ic rej"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
-    <h2 style="margin-bottom:4px">Pendaftaran Ditolak</h2>
-    <p class="meta" style="margin-bottom:16px">Akun lab menolak pendaftaran <b style="color:#fff">${esc(p.email)}</b> atas nama ${esc(m?.name || p.member_id)}.</p>
-    ${p.reason ? `<div class="anotice" style="border-left-color:var(--red)"><b>Alasan:</b> ${esc(p.reason)}</div>` : ""}
-    <div class="ahint">Hubungi akun lab kalau ini keliru. Pendaftaran ulang perlu dibuka oleh akun lab lewat menu Approval.</div>
+    <h2 style="margin-bottom:4px">Registration Rejected</h2>
+    <p class="meta" style="margin-bottom:16px">The lab account rejected the registration for <b style="color:#fff">${esc(p.email)}</b> under the name ${esc(m?.name || p.member_id)}.</p>
+    ${p.reason ? `<div class="anotice" style="border-left-color:var(--red)"><b>Reason:</b> ${esc(p.reason)}</div>` : ""}
+    <div class="ahint">Contact the lab account if this is a mistake. Re-registration has to be reopened from the Approval page.</div>
     <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:10px">Keluar</button>`);
 }
 
@@ -1595,8 +1707,8 @@ async function paintAuth() {
 function claimError(e) {
   if (e.code === "23505" || /duplicate key/i.test(e.message || "")) {
     return /profiles_pkey/.test(e.message || "")
-      ? "Email ini sudah pernah mendaftar. Silakan masuk memakai email tersebut."
-      : "Nama itu sudah dipegang akun lain. Pilih nama lain atau hubungi akun lab.";
+      ? "This email has already registered. Sign in with it instead."
+      : "That name is already held by another account. Pick another or contact the lab account.";
   }
   return e.message;
 }
@@ -1606,12 +1718,12 @@ function wireAuthForms() {
   if (lf) lf.addEventListener("submit", async e => {
     e.preventDefault();
     const btn = lf.querySelector("button[type=submit]");
-    btn.disabled = true; btn.textContent = "Memeriksa…";
+    btn.disabled = true; btn.textContent = "Checking…";
     const { error } = await sb.auth.signInWithPassword({
       email: $("#li-email").value.trim(), password: $("#li-pass").value,
     });
-    btn.disabled = false; btn.textContent = "Masuk";
-    if (error) { authErr = "Email atau password tidak cocok."; authScreen = "login"; return paintAuth(); }
+    btn.disabled = false; btn.textContent = "Sign In";
+    if (error) { authErr = "Email or password does not match."; authScreen = "login"; return paintAuth(); }
     gate();
   });
 
@@ -1621,18 +1733,18 @@ function wireAuthForms() {
     const email = $("#rg-email").value.trim(), p1 = $("#rg-pass").value, p2 = $("#rg-pass2").value;
     const mid = $("#rg-member").value;
     authScreen = "register";
-    if (email.toLowerCase() === LAB_EMAIL) { authErr = "Email ini dipakai akun lab dan tidak bisa didaftarkan di sini."; return paintAuth(); }
-    if (p1.length < 8) { authErr = "Password minimal 8 karakter."; return paintAuth(); }
-    if (p1 !== p2) { authErr = "Ulangi password belum sama."; return paintAuth(); }
-    if (!mid) { authErr = "Pilih dulu namamu dari daftar."; return paintAuth(); }
+    if (email.toLowerCase() === LAB_EMAIL) { authErr = "That address belongs to the lab account and cannot be registered here."; return paintAuth(); }
+    if (p1.length < 8) { authErr = "Password must be at least 8 characters."; return paintAuth(); }
+    if (p1 !== p2) { authErr = "The two passwords do not match."; return paintAuth(); }
+    if (!mid) { authErr = "Pick your name from the list first."; return paintAuth(); }
 
     const btn = rf.querySelector("button[type=submit]");
-    btn.disabled = true; btn.textContent = "Mengirim…";
+    btn.disabled = true; btn.textContent = "Sending…";
     const { data, error } = await sb.auth.signUp({ email, password: p1 });
-    btn.disabled = false; btn.textContent = "Kirim Pendaftaran";
+    btn.disabled = false; btn.textContent = "Submit Registration";
     if (error) { authErr = error.message; return paintAuth(); }
     if (!data.session) {
-      authErr = "Akun dibuat, tapi sesi belum aktif. Minta pengelola mematikan “Confirm email” di Supabase → Authentication → Providers → Email, lalu coba masuk.";
+      authErr = "Account created, but no session was returned. Ask the administrator to turn off “Confirm email” in Supabase → Authentication → Providers → Email, then sign in.";
       authScreen = "login"; return paintAuth();
     }
     const ins = await sb.from("profiles").insert({ user_id: data.user.id, email, member_id: mid, status: "pending" });
@@ -1644,7 +1756,7 @@ function wireAuthForms() {
   if (cf) cf.addEventListener("submit", async e => {
     e.preventDefault();
     const mid = $("#cl-member").value;
-    if (!mid) { authErr = "Pilih dulu namamu."; authScreen = "claim"; return paintAuth(); }
+    if (!mid) { authErr = "Pick your name first."; authScreen = "claim"; return paintAuth(); }
     const { data: { user } } = await sb.auth.getUser();
     const ins = await sb.from("profiles").insert({ user_id: user.id, email: user.email, member_id: mid, status: "pending" });
     if (ins.error) { authErr = claimError(ins.error); authScreen = "claim"; return paintAuth(); }
@@ -1683,7 +1795,7 @@ async function gate() {
     await loadAll();
   } catch (e) {
     showApp(false);
-    authErr = "Gagal memuat data: " + (e.message || e);
+    authErr = "Could not load data: " + (e.message || e);
     authScreen = "login"; return paintAuth();
   }
 
@@ -1699,6 +1811,7 @@ async function gate() {
   wireChrome();
   subscribeRealtime();
   loadMail();
+  initPush();
   if (!window.__mailTimer) window.__mailTimer = setInterval(() => loadMail(), 180000);
 }
 

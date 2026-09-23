@@ -5,10 +5,10 @@
 -- =====================================================================
 
 insert into public.members (id, name, role, div, level, sort) values
-  ('m01', 'Ramadhan Tangguh Defender', 'Coordinator', 'Pengurus Inti', 'inti', 1),
-  ('m02', 'Harsya Brahmantyo Wibowo', 'Vice Coordinator', 'Pengurus Inti', 'inti', 2),
-  ('m03', 'Nathasya Yuan Maharani', 'Secretary', 'Sekretariat', 'inti', 3),
-  ('m04', 'Sarah Nur Aqilah Tanjung', 'Treasurer', 'Sekretariat', 'inti', 4),
+  ('m01', 'Ramadhan Tangguh Defender', 'Coordinator', 'Core Committee', 'inti', 1),
+  ('m02', 'Harsya Brahmantyo Wibowo', 'Vice Coordinator', 'Core Committee', 'inti', 2),
+  ('m03', 'Nathasya Yuan Maharani', 'Secretary', 'Secretariat', 'inti', 3),
+  ('m04', 'Sarah Nur Aqilah Tanjung', 'Treasurer', 'Secretariat', 'inti', 4),
   ('m05', 'Fathimah Radhiyya', 'Coordinator HR', 'Human Resource', 'inti', 5),
   ('m06', 'Paul Deniel Jagasa Ginting', 'Staff HR', 'Human Resource', 'staff', 6),
   ('m07', 'Faishal Subkhan Ramadhan', 'Staff HR', 'Human Resource', 'staff', 7),
@@ -35,12 +35,12 @@ on conflict (id) do update set name=excluded.name, role=excluded.role,
   div=excluded.div, level=excluded.level, sort=excluded.sort;
 
 insert into public.divisions (id, name, tagline, sort) values
-  ('d1', 'Coordinator & Vice Coordinator', 'Komando lab, koordinasi lintas divisi, dan pertanggungjawaban periode.', 1),
-  ('d2', 'Secretary & Treasurer', 'Administrasi, arsip, dan seluruh lalu lintas keuangan lab.', 2),
-  ('d3', 'Human Resource', 'Rekrutmen, pembinaan, dan kesehatan internal anggota lab.', 3),
-  ('d4', 'Media & Partner', 'Identitas visual, publikasi, dokumentasi, dan hubungan mitra.', 4),
-  ('d5', 'Study Group', 'Pembinaan teknis rutin: kelas internal, latihan CTF, dan kurikulum aslab.', 5),
-  ('d6', 'Research & Development Team', 'Riset forensik digital, keamanan jaringan, dan pengembangan tools lab.', 6)
+  ('d1', 'Coordinator & Vice Coordinator', 'Lab leadership, cross-division coordination, and accountability for the term.', 1),
+  ('d2', 'Secretary & Treasurer', 'Administration, records, and every rupiah that moves through the lab.', 2),
+  ('d3', 'Human Resource', 'Recruitment, development, and the wellbeing of lab members.', 3),
+  ('d4', 'Media & Partner', 'Visual identity, publications, documentation, and partner relations.', 4),
+  ('d5', 'Study Group', 'Routine technical training: internal classes, CTF practice, and the assistant curriculum.', 5),
+  ('d6', 'Research & Development Team', 'Digital forensics research, network security, and in-house tooling.', 6)
 on conflict (id) do update set name=excluded.name, tagline=excluded.tagline, sort=excluded.sort;
 
 insert into public.division_members (division_id, member_id, sort) values

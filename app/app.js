@@ -1524,6 +1524,12 @@ function wireChrome() {
   if (chromeWired) return;
   chromeWired = true;
   const qEl = $("#q"), resEl = $("#results");
+  /* placeholder panjang membuat kotak pencarian menolak menyusut di HP */
+  const fitPlaceholder = () => {
+    qEl.placeholder = innerWidth < 620 ? "search..." : "search program / division / member...";
+  };
+  fitPlaceholder();
+  addEventListener("resize", fitPlaceholder);
   qEl.addEventListener("input", () => {
     const v = qEl.value.trim().toLowerCase();
     if (v.length < 2) { resEl.hidden = true; return; }

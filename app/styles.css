@@ -91,9 +91,9 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
   position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
   padding:11px 22px;border-bottom:1px solid var(--line);background:rgba(5,5,5,.92);backdrop-filter:blur(8px);
 }
-.hamb{display:none;padding:8px;margin:-8px 0 -8px -8px;color:var(--fg)}
+.hamb{display:none;flex:0 0 auto;padding:8px;color:var(--fg)}
 .hamb svg{display:block;width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9}
-.search{flex:1;max-width:460px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0d0d0d;padding:7px 11px;transition:.15s;position:relative}
+.search{flex:1 1 auto;min-width:0;max-width:460px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0d0d0d;padding:7px 11px;transition:.15s;position:relative}
 .search:focus-within{border-color:var(--edge);box-shadow:var(--glow)}
 .search .pr{color:var(--red);font-weight:700}
 .search input{flex:1;background:none;border:0;color:#fff;outline:none;font-size:12.5px;min-width:0}
@@ -103,7 +103,7 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 .results button{display:block;width:100%;text-align:left;padding:9px 12px;border-bottom:1px solid #1c1c1c;font-size:12px}
 .results button:hover{background:rgba(228,24,26,.12)}
 .results .k{font-size:9px;letter-spacing:.2em;color:var(--red);text-transform:uppercase;font-family:var(--disp)}
-.tb-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.tb-right{margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:14px}
 .bell{position:relative;padding:8px;color:var(--fg)}
 .bell:hover{color:#fff}
 .bell svg{display:block;width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
@@ -495,4 +495,22 @@ textarea.ainput{resize:vertical;line-height:1.55}
 
 @media (min-width:841px){
   #sideScrim{display:none!important}
+}
+
+/* ---------- tombol ikon topbar di layar kecil ----------
+   Diberi kotak dan garis tipis supaya posisinya tetap terlihat walaupun
+   garis ikonnya gagal dirender browser tertentu. */
+@media (max-width:840px){
+  .hamb,.bell{width:38px;height:38px;min-width:38px;padding:0;margin:0;
+    display:grid;place-items:center;color:#fff;
+    background:#101010;box-shadow:inset 0 0 0 1px var(--line)}
+  .hamb svg,.bell svg{width:20px;height:20px;display:block;
+    stroke:#fff;fill:none;stroke-width:1.9}
+  .bell .badge{top:-3px;right:-3px}
+  .logout{width:36px;height:36px;min-width:36px;padding:0;margin-left:4px;
+    display:grid;place-items:center;color:#fff;
+    background:#101010;box-shadow:inset 0 0 0 1px var(--line)}
+  .logout svg{width:18px;height:18px;display:block;stroke:#fff;fill:none}
+  .me{padding-left:8px}
+  #topbar{gap:8px;padding:9px 12px}
 }

@@ -536,22 +536,6 @@ textarea.ainput{resize:vertical;line-height:1.55}
   50%    {box-shadow:inset 0 0 0 1px rgba(228,24,26,.6),0 0 58px rgba(228,24,26,.2)}
 }
 
-.authbox::after{
-  content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,
-    transparent 38%,
-    rgba(228,24,26,.08) 47%,
-    rgba(255,255,255,.03) 50%,
-    rgba(228,24,26,.08) 53%,
-    transparent 62%);
-  background-size:100% 240%;
-  animation:authsweep 9s linear infinite;
-}
-@keyframes authsweep{
-  0%  {background-position:0 -150%}
-  100%{background-position:0  150%}
-}
-
 .authbox .dots{animation:authdrift 26s linear infinite}
 @keyframes authdrift{
   0%  {background-position:0 0}

@@ -1769,6 +1769,19 @@ function wireAuthForms() {
     btn.disabled = true; btn.textContent = "Sending…";
     const { data, error } = await sb.auth.signUp({ email, password: p1 });
     btn.disabled = false; btn.textContent = "Submit Registration";
+
+    const sudahAda =
+      /already (registered|been registered|exists)/i.test(error?.message || "") ||
+      error?.code === "user_already_exists" ||
+      /* Supabase kadang menyamarkan email yang sudah terpakai demi mencegah
+         penelusuran akun: balasannya sukses tapi tanpa identitas. */
+      (!error && data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0);
+
+    if (sudahAda) {
+      authErr = "This email is already registered. Sign in with it instead, or contact the lab account if you have forgotten the password.";
+      authScreen = "login";
+      return paintAuth();
+    }
     if (error) { authErr = error.message; return paintAuth(); }
     if (!data.session) {
       authErr = "Account created, but no session was returned. Ask the administrator to turn off “Confirm email” in Supabase → Authentication → Providers → Email, then sign in.";

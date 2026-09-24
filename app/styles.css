@@ -323,7 +323,20 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 .authbox .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px)}
 .authbox>*{position:relative}
 .authhead{display:flex;gap:14px;align-items:center}
-.authrule{margin:18px 0 12px}
+/* Garis pemisah di atas label Management System: satu titik terang
+   menyusurinya dari kiri ke kanan. */
+.authrule{position:relative;overflow:hidden;margin:18px 0 12px}
+.authrule::after{
+  content:"";position:absolute;top:0;left:0;height:100%;width:32%;
+  background:linear-gradient(90deg,transparent,#ff5b5c 35%,#fff 50%,#ff5b5c 65%,transparent);
+  box-shadow:0 0 10px rgba(228,24,26,.8);
+  animation:ruleScan 3.8s cubic-bezier(.5,0,.5,1) infinite;
+}
+@keyframes ruleScan{
+  0%   {transform:translateX(-110%)}
+  55%  {transform:translateX(420%)}
+  100% {transform:translateX(420%)}
+}
 .authkick{margin-bottom:16px}
 .authhead img{display:block;width:46px;height:auto}
 .aform{display:flex;flex-direction:column;gap:13px}
@@ -527,9 +540,9 @@ textarea.ainput{resize:vertical;line-height:1.55}
   content:"";position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(180deg,
     transparent 38%,
-    rgba(228,24,26,.13) 47%,
-    rgba(255,255,255,.05) 50%,
-    rgba(228,24,26,.13) 53%,
+    rgba(228,24,26,.08) 47%,
+    rgba(255,255,255,.03) 50%,
+    rgba(228,24,26,.08) 53%,
     transparent 62%);
   background-size:100% 240%;
   animation:authsweep 9s linear infinite;

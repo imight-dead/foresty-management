@@ -1618,7 +1618,8 @@ function authShell(inner) {
           <div class="bs" style="font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase">Forensics &amp; Security</div>
         </div>
       </div>
-      <span class="labshow" style="margin:0 0 18px">FORESTY MANAGEMENT</span>
+      <div class="rule authrule"></div>
+      <div class="kick authkick">Management System · 2026 / 2027</div>
       ${authErr ? `<div class="aerr">${esc(authErr)}</div>` : ""}
       ${authInfo ? `<div class="anotice">${esc(authInfo)}</div>` : ""}
       ${inner}

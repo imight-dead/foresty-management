@@ -53,16 +53,6 @@ input{font-family:inherit;font-size:inherit}
 #shell.rail .brand img{width:30px}
 .brand .bt{font-family:var(--disp);font-weight:700;letter-spacing:.13em;font-size:14px;line-height:1.15}
 .brand .bs{font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase}
-/* Sekeluarga dengan hero Dashboard, tapi ditahan: cukup dasar gelap
-   bersemburat merah, garis tepi tipis, dan satu batang merah di kiri. */
-.labshow{
-  display:block;margin:14px 16px 6px;padding:9px 12px;
-  color:var(--fg);font-family:var(--disp);font-weight:700;
-  font-size:10px;letter-spacing:.2em;
-  clip-path:var(--cut-tag);
-  background:linear-gradient(100deg,#1c0606 0%,#101010 72%);
-  box-shadow:inset 2px 0 0 var(--red), inset 0 0 0 1px rgba(228,24,26,.26);
-}
 nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
 .nav-item{
   display:flex;align-items:center;gap:11px;padding:10px 16px;color:var(--muted);
@@ -332,7 +322,9 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
   mask-image:linear-gradient(120deg,rgba(0,0,0,.85),transparent 55%);opacity:.45}
 .authbox .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px)}
 .authbox>*{position:relative}
-.authhead{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.authhead{display:flex;gap:14px;align-items:center}
+.authrule{margin:18px 0 12px}
+.authkick{margin-bottom:16px}
 .authhead img{display:block;width:46px;height:auto}
 .aform{display:flex;flex-direction:column;gap:13px}
 .afield{display:flex;flex-direction:column;gap:5px}

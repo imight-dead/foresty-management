@@ -83,7 +83,6 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 #shell.rail{--sidebar:62px}
 #shell.rail .brand{padding:18px 0;justify-content:center;gap:0}
 #shell.rail .btxt{display:none}
-#shell.rail .labshow{display:none}
 #shell.rail nav{padding:10px 0;margin-top:0;border-top:1px solid var(--line)}
 #shell.rail .nav-item{justify-content:center;padding:12px 0;gap:0;border-left-width:0;border-right:2px solid transparent}
 #shell.rail .nav-item.active{border-right-color:var(--red);background:rgba(228,24,26,.16)}

@@ -16,7 +16,8 @@
 *{box-sizing:border-box;border-radius:0}
 [hidden]{display:none!important}
 img,svg{max-width:100%}
-html{color-scheme:dark;scrollbar-gutter:stable}
+html{color-scheme:dark;scrollbar-width:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0;display:none}
 body{
   margin:0;background:var(--bg);color:var(--fg);
   font-family:var(--mono);font-size:13.5px;line-height:1.6;

@@ -1893,6 +1893,19 @@ async function paintAuth() {
   wireAuthForms();
 }
 
+/* Pesan gagal masuk. Status persetujuan (menunggu / ditolak) baru bisa
+   ditampilkan SETELAH email dan password cocok, jadi kalau password salah
+   yang muncul tetap "tidak cocok" — termasuk untuk akun yang belum disetujui. */
+function loginError(e) {
+  if (e.code === "email_not_confirmed" || /not confirmed/i.test(e.message || ""))
+    return "This account's email has not been confirmed yet. Ask the lab account to confirm it in Supabase → Authentication → Users.";
+  if (e.status === 429 || /rate limit|too many/i.test(e.message || ""))
+    return "Too many sign-in attempts. Wait a few minutes, then try again.";
+  if (e.code === "invalid_credentials" || /invalid login credentials/i.test(e.message || ""))
+    return "Email or password does not match. If you registered before with this email, its first password still applies — use Forgot password? to set a new one.";
+  return "Could not sign in: " + (e.message || e);
+}
+
 /* nama sudah dipegang akun lain, atau email ini sudah pernah mendaftar */
 function claimError(e) {
   if (e.code === "23505" || /duplicate key/i.test(e.message || "")) {
@@ -1913,7 +1926,7 @@ function wireAuthForms() {
       email: $("#li-email").value.trim(), password: $("#li-pass").value,
     });
     btn.disabled = false; btn.textContent = "Sign In";
-    if (error) { authErr = "Email or password does not match."; authScreen = "login"; return paintAuth(); }
+    if (error) { authErr = loginError(error); authScreen = "login"; return paintAuth(); }
     gate();
   });
 
@@ -1982,7 +1995,9 @@ function wireAuthForms() {
       (!error && data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0);
 
     if (sudahAda) {
-      authErr = "This email is already registered. Sign in with it instead, or contact the lab account if you have forgotten the password.";
+      authErr = "This email already has an account, so no new one was created and your new password was not saved. " +
+        "Sign in with the password you used the first time, or use Forgot password? to set a new one. " +
+        "After signing in you will be asked to pick your name if your registration was never finished.";
       authScreen = "login";
       return paintAuth();
     }

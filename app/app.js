@@ -18,7 +18,16 @@ if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.includes("xxxxxxxx")) {
   throw new Error("config.js has not been filled in");
 }
 
+/* Link reset password dari email kembali ke sini dengan type=recovery di
+   URL (atau error_description kalau linknya kedaluwarsa). Dicatat sebelum
+   Supabase membersihkan URL-nya. */
+const AUTH_URL = new URLSearchParams(location.hash.slice(1) + "&" + location.search.slice(1));
+let recovering = AUTH_URL.get("type") === "recovery";
+let linkErr = AUTH_URL.get("error_description") ? "That reset link has expired or was already used. Request a new one below." : "";
+if (linkErr) history.replaceState(null, "", location.pathname);
+
 const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+sb.auth.onAuthStateChange(ev => { if (ev === "PASSWORD_RECOVERY") recovering = true; });
 
 /* ---------------------------------------------------------------- utilitas */
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -57,8 +66,21 @@ const canAll = () => isLab() || ME?.level === "inti";
 const canCheck = c => canAll() || c.who === myId();
 const canTask = mid => canAll() || mid === myId();
 
+/* Teks tampilan divisi ditetapkan di sini, bukan dibaca dari database,
+   supaya data lama yang masih berbahasa Indonesia tetap tampil Inggris.
+   Divisi baru yang tidak ada di daftar ini memakai tagline dari database. */
+const DIV_LABEL = { "Pengurus Inti": "Core Committee", "Sekretariat": "Secretariat" };
+const TAGLINE = {
+  d1: "Lab leadership, cross-division coordination, and accountability for the term.",
+  d2: "Administration, records, and every rupiah that moves through the lab.",
+  d3: "Recruitment, development, and the wellbeing of lab members.",
+  d4: "Visual identity, publications, documentation, and partner relations.",
+  d5: "Routine technical training: internal classes, CTF practice, and the assistant curriculum.",
+  d6: "Digital forensics research, network security, and in-house tooling.",
+};
+
 async function loadAll() {
-  const [mem, div, dmem, tsk, prg, pic, chk, log, nrd, mtg] = await Promise.all([
+  const [mem, div, dmem, tsk, prg, pic, chk, log, nrd, mtg, due] = await Promise.all([
     sb.from("members").select("*").order("sort"),
     sb.from("divisions").select("*").order("sort"),
     sb.from("division_members").select("*").order("sort"),
@@ -69,14 +91,15 @@ async function loadAll() {
     sb.from("activity_log").select("*").order("created_at", { ascending: false }),
     sb.from("notif_read").select("notif_key"),
     sb.from("meetings").select("*").order("held_at", { ascending: false }),
+    sb.from("tasks").select("due_at").limit(1),
   ]);
   for (const r of [mem, div, dmem, tsk, prg, pic, chk, log, nrd])
     if (r.error) throw r.error;
 
-  MEMBERS = mem.data;
+  MEMBERS = mem.data.map(m => ({ ...m, div: DIV_LABEL[m.div] || m.div }));
 
   DIVISIONS = div.data.map(d => ({
-    id: d.id, name: d.name, tagline: d.tagline,
+    id: d.id, name: d.name, tagline: TAGLINE[d.id] || d.tagline,
     people: dmem.data.filter(x => x.division_id === d.id).map(x => ({
       m: x.member_id,
       tasks: tsk.data.filter(t => t.division_id === d.id && t.member_id === x.member_id),
@@ -101,6 +124,10 @@ async function loadAll() {
      Selama belum, menu Notulen tampil kosong, sisanya tetap jalan. */
   MEETINGS = mtg.error ? [] : mtg.data.map(m => ({ ...m, held: new Date(m.held_at) }));
   meetingsReady = !mtg.error;
+
+  /* Kolom tasks.due_at baru ada setelah db/10_task_deadline.sql dijalankan.
+     Selama belum, isian tenggat disembunyikan, sisanya tetap jalan. */
+  taskDueReady = !due.error;
 }
 
 /* menulis jejak perubahan; gagal pun tidak membatalkan aksi utama */
@@ -144,15 +171,34 @@ async function addCheck(pid, text, who) {
   toast("Checklist item added.");
 }
 
-async function addTask(did, mid, text) {
+async function addTask(did, mid, text, due) {
   if (!canTask(mid)) return toast("You can only add tasks under your own name.", true);
-  const { data, error } = await sb.from("tasks")
-    .insert({ division_id: did, member_id: mid, text, created_by: ME.user.id })
-    .select().single();
+  const row = { division_id: did, member_id: mid, text, created_by: ME.user.id };
+  if (due) row.due_at = due.toISOString();
+  const { data, error } = await sb.from("tasks").insert(row).select().single();
   if (error) return fail(error, "Could not add the task");
   DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks.push(data);
   rerender();
-  toast("Task added.");
+  toast(due ? `Task added, due ${fDate(due)} at ${fTime(due)}.` : "Task added.");
+}
+
+/* due = null menghapus tenggat */
+async function setTaskDue(did, mid, tid, due) {
+  if (!canTask(mid)) return toast("You can only change tasks assigned to you.", true);
+  const t = DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks.find(x => x.id === tid);
+  const prev = t.due_at;
+  t.due_at = due ? due.toISOString() : null;
+  dueEdit = null;
+  rerender();
+  const { error } = await sb.from("tasks").update({ due_at: t.due_at }).eq("id", tid);
+  if (error) { t.due_at = prev; rerender(); return fail(error, "Could not save the deadline"); }
+  toast(due ? `Deadline set to ${fDate(due)} at ${fTime(due)}.` : "Deadline removed.");
+}
+
+/* Tanggal wajib, jam boleh kosong — tanpa jam, tenggatnya akhir hari itu. */
+function readDue(f) {
+  if (!f.tgl || !f.tgl.value) return null;
+  return new Date(`${f.tgl.value}T${f.jam.value || "23:59"}`);
 }
 
 async function markRead(keys) {
@@ -284,6 +330,13 @@ function pushPanel() {
 
 /* ---------------------------------------------------------------- notulen */
 let meetingsReady = true;
+let taskDueReady = true;
+let dueEdit = null;   // id tugas yang isian tenggatnya sedang terbuka
+const taskDue = t => t.due_at ? new Date(t.due_at) : null;
+
+/* Divisi yang tenggat tugasnya masuk kalender saya: divisi tempat saya
+   terdaftar. Akun lab tidak punya divisi, jadi melihat semuanya. */
+const myDivisions = () => isLab() ? DIVISIONS : DIVISIONS.filter(d => d.people.some(p => p.m === myId()));
 
 const ROOMS = [
   { id: "koorinti", label: "Core Committee Meeting",        short: "Core" },
@@ -360,7 +413,10 @@ const unreadCount = () => buildNotifs().filter(n => !NREAD.has(n.id)).length;
 function allEvents() {
   const now = new Date();
   const ev = PROGRAMS.map(p => ({ when: p.date, title: p.title, pid: p.id, type: p.status, sub: p.place }));
-  MEETINGS.forEach(m => ev.push({
+  /* Rapat hanya dari ruang yang jadi hak saya (lihat myRooms). RLS di
+     06_notulen.sql sudah menyaringnya; ini menegaskannya di kalender. */
+  const rooms = myRooms();
+  MEETINGS.filter(m => rooms.includes(m.room)).forEach(m => ev.push({
     when: m.held, title: m.title, mid: m.id,
     type: m.held < now ? "completed" : "ongoing",
     sub: `${room(m.room).label}${m.place ? " · " + m.place : ""}`,
@@ -372,8 +428,21 @@ function allEvents() {
         type: c.done ? "completed" : "ongoing",
         sub: `${p.title} · PIC ${byId(c.who)?.name || "-"}`,
       });
+  for (const d of myDivisions())
+    for (const p of d.people)
+      for (const t of p.tasks) {
+        const due = taskDue(t);
+        if (due) ev.push({
+          when: due, title: `Task: ${t.text}`, did: d.id,
+          type: t.status === "done" ? "completed" : "ongoing",
+          sub: `${d.name} · ${byId(p.m)?.name || "-"}`,
+        });
+      }
   return ev.sort((a, b) => a.when - b.when);
 }
+
+/* ke mana sebuah agenda dibuka saat diklik */
+const evAttr = e => e.mid ? `data-minute="${e.mid}"` : e.did ? `data-open-div="${e.did}"` : `data-open-prog="${e.pid}"`;
 
 /* ---------------------------------------------------------------- fragmen */
 const tag = s => `<span class="tag t-${s === "soon" ? "soon" : s}">${s === "ongoing" ? '<i class="dot pulse"></i>' : ""}${STATUS_LABEL[s]}</span>`;
@@ -514,7 +583,7 @@ function viewDashboard() {
   const unread = unreadCount();
 
   const rows = upcoming.map((e, i) => `
-    <button class="dl-row" ${e.mid ? `data-minute="${e.mid}"` : `data-open-prog="${e.pid}"`}>
+    <button class="dl-row" ${evAttr(e)}>
       <span class="idx num">${String(i + 1).padStart(2, "0")}</span>
       <span class="nm"><b>${esc(e.title)}</b><span class="meta">${esc(e.sub)} · ${fShort(e.when)} · ${fTime(e.when)}</span></span>
       ${countdown(e.when)}
@@ -564,7 +633,7 @@ function calendar() {
   const selDate = calSel ? new Date(calSel + "T00:00") : null;
   const detail = calSel ? `<div class="day-detail">
       <div class="label" style="margin-bottom:6px">${DW[selDate.getDay()]}, ${fDate(selDate)}</div>
-      ${sel.length ? sel.map(e => `<button class="ev" ${e.mid ? `data-minute="${e.mid}"` : `data-open-prog="${e.pid}"`}>
+      ${sel.length ? sel.map(e => `<button class="ev" ${evAttr(e)}>
           <i class="dot" style="margin-top:7px;background:${e.type === "completed" ? "var(--ok)" : e.type === "soon" ? "var(--dim)" : "var(--red)"}"></i>
           <span><span class="evn" style="font-size:12.5px">${esc(e.title)}</span>
           <span class="meta">${fTime(e.when)} · ${esc(e.sub)}</span></span></button>`).join("")
@@ -849,12 +918,39 @@ function dutyBlock(mid) {
   </div>`;
 }
 
-const taskRow = (did, mid, t) => `<button class="task${t.status === "done" ? " done" : ""}${canTask(mid) ? "" : " locked"}" data-task="${did}|${mid}|${t.id}">
-  <span class="st ${t.status}"></span><span class="tx">${esc(t.text)}</span><span class="stl">${ST_LABEL[t.status]}</span></button>`;
+/* Keterangan tenggat di bawah teks tugas. Yang lewat tenggat dan belum
+   selesai ditandai merah. */
+function dueNote(t) {
+  const due = taskDue(t);
+  if (!due) return "";
+  const late = t.status !== "done" && due < new Date();
+  return `<span class="tdue${late ? " late" : ""}">Due ${fShort(due)} · ${fTime(due)}${
+    t.status === "done" ? "" : ` · ${late ? "overdue" : cdShort(due)}`}</span>`;
+}
+
+function taskRow(did, mid, t) {
+  const can = canTask(mid);
+  const row = `<button class="task${t.status === "done" ? " done" : ""}${can ? "" : " locked"}" data-task="${did}|${mid}|${t.id}">
+    <span class="st ${t.status}"></span><span class="tx">${esc(t.text)}${dueNote(t)}</span><span class="stl">${ST_LABEL[t.status]}</span></button>`;
+  if (!can || !taskDueReady) return row;
+
+  const due = taskDue(t);
+  const btn = `<button class="tdue-btn${dueEdit === t.id ? " on" : ""}" data-taskdue="${t.id}" title="${due ? "Change deadline" : "Set deadline"}" aria-label="${due ? "Change deadline" : "Set deadline"}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>`;
+  const form = dueEdit !== t.id ? "" : `<form class="addrow duerow" data-taskdueform="${did}|${mid}|${t.id}">
+      <input class="ainput" type="date" name="tgl" value="${due ? dInput(due) : ""}" required aria-label="Deadline date">
+      <input class="ainput" type="time" name="jam" value="${due ? tInput(due) : ""}" aria-label="Deadline time">
+      <button class="btn sm" type="submit">Save</button>
+      ${due ? `<button class="btn sm ghost" type="button" data-taskdueclear="${did}|${mid}|${t.id}">Remove</button>` : ""}
+    </form>`;
+  return `<div class="trow">${row}${btn}</div>${form}`;
+}
 
 const addTaskForm = (did, mid) => canTask(mid)
   ? `<form class="addrow" data-addtask="${did}|${mid}">
        <input class="ainput" name="text" placeholder="Add a task..." required>
+       ${taskDueReady ? `<input class="ainput due" type="date" name="tgl" title="Deadline (optional)" aria-label="Deadline date (optional)">
+       <input class="ainput due" type="time" name="jam" title="Deadline time (optional, default 23:59)" aria-label="Deadline time (optional)">` : ""}
        <button class="btn sm" type="submit">+</button></form>` : "";
 
 function modalDivision(did) {
@@ -1245,7 +1341,8 @@ function viewInbox() {
         </span>
         <span class="meta num" style="white-space:nowrap">${waktu}</span>
       </a>`;
-    }).join("")}</div>`;
+    }).join("")}</div>
+    ${MAIL.next ? `<button class="btn ghost" data-mailmore style="width:100%;justify-content:center;margin-top:12px"${MAIL.more ? " disabled" : ""}>${MAIL.more ? "Loading…" : "Load older email"}</button>` : ""}`;
   }
 
   return `<div class="sec-head"><div><div class="kick">Official Lab Mailbox</div><h1>Inbox</h1></div></div>
@@ -1274,7 +1371,7 @@ function viewInbox() {
 }
 
 /* ---------------------------------------------------------------- GMAIL */
-let MAIL = { messages: [], loaded: false, loading: false, configured: true, error: null };
+let MAIL = { messages: [], loaded: false, loading: false, configured: true, error: null, next: null, more: false, paged: false };
 
 const unreadMail = () => MAIL.messages.filter(m => m.unread).length;
 
@@ -1292,10 +1389,31 @@ async function loadMail(force) {
     MAIL.configured = false;
     MAIL.messages = [];
   } else {
-    MAIL.messages = data.messages || [];
+    /* email lama yang sudah dimuat lewat "Load older" tetap di bawah,
+       supaya tarikan ulang tiap 3 menit tidak memotong daftarnya */
+    const fresh = data.messages || [];
+    const ids = new Set(fresh.map(m => m.id));
+    const older = MAIL.paged ? MAIL.messages.filter(m => !ids.has(m.id)) : [];
+    MAIL.messages = fresh.concat(older);
+    if (!MAIL.paged) MAIL.next = data.next || null;
     MAIL.configured = data.configured !== false;
     MAIL.error = data.error || null;
   }
+  render();
+}
+
+/* email yang lebih lama, ditambahkan di bawah daftar */
+async function loadMoreMail() {
+  if (!isLab() || !MAIL.next || MAIL.more) return;
+  MAIL.more = true;
+  render();
+  const { data, error } = await sb.functions.invoke("gmail-inbox?page=" + encodeURIComponent(MAIL.next));
+  MAIL.more = false;
+  if (error || data.error) { render(); return toast("Could not load older email: " + (data?.error || error.message), true); }
+  const ada = new Set(MAIL.messages.map(m => m.id));
+  MAIL.messages.push(...(data.messages || []).filter(m => !ada.has(m.id)));
+  MAIL.next = data.next || null;
+  MAIL.paged = true;
   render();
 }
 
@@ -1311,7 +1429,7 @@ async function loadProfiles() {
 }
 
 function viewApproval() {
-  if (!isLab()) return `<div class="empty">Halaman ini hanya untuk akun lab.</div>`;
+  if (!isLab()) return `<div class="empty">This page is for the lab account only.</div>`;
   const dupes = {};
   PENDING.forEach(a => dupes[a.member_id] = (dupes[a.member_id] || 0) + 1);
 
@@ -1462,7 +1580,7 @@ function render() {
 
 /* ---------------------------------------------------------------- interaksi */
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push]");
+  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-taskdue],[data-taskdueclear],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-mailmore],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push]");
   if (!t) return;
   const d = t.dataset;
 
@@ -1478,6 +1596,7 @@ document.addEventListener("click", e => {
   if (d.editprog) return showModal("form", d.editprog);
   if (d.progdel) return deleteProgram(d.progdel);
   if (d.mailrefresh !== undefined) return loadMail(true);
+  if (d.mailmore !== undefined) return loadMoreMail();
   if (d.copy !== undefined) {
     navigator.clipboard?.writeText(d.copy)
       .then(() => toast("Email address copied."), () => toast("The browser refused to copy.", true));
@@ -1490,6 +1609,8 @@ document.addEventListener("click", e => {
   if (d.openMember) return showModal("member", d.openMember);
   if (d.check) { const [pid, cid] = d.check.split("|"); return toggleCheck(pid, cid); }
   if (d.task) { const [did, mid, tid] = d.task.split("|"); return cycleTask(did, mid, tid); }
+  if (d.taskdue) { dueEdit = dueEdit === d.taskdue ? null : d.taskdue; return rerender(); }
+  if (d.taskdueclear) { const [did, mid, tid] = d.taskdueclear.split("|"); return setTaskDue(did, mid, tid, null); }
   if (d.cal !== undefined) {
     if (d.cal === "0") { const n = new Date(); calCursor = new Date(n.getFullYear(), n.getMonth(), 1); }
     else calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(d.cal), 1);
@@ -1514,7 +1635,13 @@ document.addEventListener("submit", e => {
     e.preventDefault();
     const [did, mid] = f.dataset.addtask.split("|");
     const txt = f.text.value.trim(); if (!txt) return;
-    addTask(did, mid, txt);
+    addTask(did, mid, txt, readDue(f));
+  }
+  if (f.dataset.taskdueform) {
+    e.preventDefault();
+    const [did, mid, tid] = f.dataset.taskdueform.split("|");
+    const due = readDue(f); if (!due) return;
+    setTaskDue(did, mid, tid, due);
   }
 });
 
@@ -1618,8 +1745,8 @@ function authShell(inner) {
           <div class="bs" style="font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase">Forensics &amp; Security</div>
         </div>
       </div>
-      <div class="rule authrule"></div>
-      <div class="kick authkick">Management System · 2026 / 2027</div>
+      <div class="rule live authrule"></div>
+      <div class="kick authkick">Foresty Management System · 26/27</div>
       ${authErr ? `<div class="aerr">${esc(authErr)}</div>` : ""}
       ${authInfo ? `<div class="anotice">${esc(authInfo)}</div>` : ""}
       ${inner}
@@ -1641,6 +1768,7 @@ async function viewLogin() {
         <input id="li-email" type="email" autocomplete="username" placeholder="name@email.com" required></label>
       <label class="afield"><span class="label">Web account password</span>
         <input id="li-pass" type="password" autocomplete="current-password" placeholder="••••••••" required></label>
+      <button type="button" class="aforgot" data-auth="forgot">Forgot password?</button>
       <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Sign In</button>
     </form>
     <div class="aalt">No account yet? <button data-auth="register">Register here</button></div>`);
@@ -1708,7 +1836,39 @@ async function viewRejected() {
     <p class="meta" style="margin-bottom:16px">The lab account rejected the registration for <b style="color:#fff">${esc(p.email)}</b> under the name ${esc(m?.name || p.member_id)}.</p>
     ${p.reason ? `<div class="anotice" style="border-left-color:var(--red)"><b>Reason:</b> ${esc(p.reason)}</div>` : ""}
     <div class="ahint">Contact the lab account if this is a mistake. Re-registration has to be reopened from the Approval page.</div>
-    <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:10px">Keluar</button>`);
+    <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:10px">Sign out</button>`);
+}
+
+/* Lupa password: Supabase mengirim link reset ke email itu. Balasannya
+   sengaja sama untuk email terdaftar maupun tidak, supaya halaman ini
+   tidak bisa dipakai menebak siapa yang punya akun. */
+async function viewForgot() {
+  return authShell(`
+    <h2 style="margin-bottom:4px">Reset Password</h2>
+    <p class="meta" style="margin-bottom:18px">Enter the email you sign in with. We'll send a link to set a new password.</p>
+    <form class="aform" id="forgotForm">
+      <label class="afield"><span class="label">Email</span>
+        <input id="fg-email" type="email" autocomplete="username" placeholder="name@email.com" required></label>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Send Reset Link</button>
+    </form>
+    <div class="aalt">Remembered it? <button data-auth="login">Back to sign in</button></div>`);
+}
+
+/* Dibuka dari link di email: sesi sementara sudah ada, tinggal isi password baru. */
+async function viewReset() {
+  const { data: { user } } = await sb.auth.getUser();
+  return authShell(`
+    <h2 style="margin-bottom:4px">Set New Password</h2>
+    <p class="meta" style="margin-bottom:18px">For <b style="color:#fff">${esc(user?.email || "")}</b>. At least 8 characters.</p>
+    <form class="aform" id="resetForm">
+      <input type="email" autocomplete="username" value="${esc(user?.email || "")}" hidden>
+      <label class="afield"><span class="label">New password</span>
+        <input id="rs-pass" type="password" autocomplete="new-password" placeholder="••••••••" minlength="8" required></label>
+      <label class="afield"><span class="label">Repeat new password</span>
+        <input id="rs-pass2" type="password" autocomplete="new-password" placeholder="••••••••" minlength="8" required></label>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;margin-top:4px">Save Password</button>
+    </form>
+    <div class="aalt">Not you? <button data-auth="logout">Cancel and sign out</button></div>`);
 }
 
 async function authAction(act, arg) {
@@ -1725,6 +1885,8 @@ async function paintAuth() {
     : authScreen === "claim"    ? await viewClaim()
     : authScreen === "pending"  ? await viewPending()
     : authScreen === "rejected" ? await viewRejected()
+    : authScreen === "forgot"   ? await viewForgot()
+    : authScreen === "reset"    ? await viewReset()
     : await viewLogin();
   root.innerHTML = v;
   authErr = ""; authInfo = "";
@@ -1753,6 +1915,47 @@ function wireAuthForms() {
     btn.disabled = false; btn.textContent = "Sign In";
     if (error) { authErr = "Email or password does not match."; authScreen = "login"; return paintAuth(); }
     gate();
+  });
+
+  const ff = $("#forgotForm");
+  if (ff) ff.addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = $("#fg-email").value.trim();
+    const btn = ff.querySelector("button[type=submit]");
+    btn.disabled = true; btn.textContent = "Sending…";
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    btn.disabled = false; btn.textContent = "Send Reset Link";
+    if (error) {
+      authErr = error.status === 429 || /rate limit/i.test(error.message || "")
+        ? "Too many reset emails were sent recently. Wait a while, then try again."
+        : "Could not send the reset email: " + error.message;
+      authScreen = "forgot"; return paintAuth();
+    }
+    authInfo = `If ${email} has an account, a reset link is on its way. Check the inbox and the spam folder — the link works once and expires after an hour.`;
+    authScreen = "login"; paintAuth();
+  });
+
+  const sf = $("#resetForm");
+  if (sf) sf.addEventListener("submit", async e => {
+    e.preventDefault();
+    const p1 = $("#rs-pass").value, p2 = $("#rs-pass2").value;
+    authScreen = "reset";
+    if (p1.length < 8) { authErr = "Password must be at least 8 characters."; return paintAuth(); }
+    if (p1 !== p2) { authErr = "The two passwords do not match."; return paintAuth(); }
+    const btn = sf.querySelector("button[type=submit]");
+    btn.disabled = true; btn.textContent = "Saving…";
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    btn.disabled = false; btn.textContent = "Save Password";
+    if (error) {
+      authErr = error.code === "same_password" ? "The new password must be different from the old one."
+        : error.code === "weak_password" ? "That password is too weak. Pick a longer one."
+        : "Could not save the password: " + error.message;
+      return paintAuth();
+    }
+    recovering = false;
+    history.replaceState(null, "", location.pathname);
+    await gate();
+    toast("Password updated. Use the new one next time you sign in.");
   });
 
   const rf = $("#regForm");
@@ -1814,7 +2017,13 @@ function showApp(on) {
 
 async function gate() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) { showApp(false); authScreen = "login"; return paintAuth(); }
+  if (!session) {
+    showApp(false);
+    authScreen = linkErr ? "forgot" : "login";
+    authErr = linkErr; linkErr = "";
+    return paintAuth();
+  }
+  if (recovering) { showApp(false); authScreen = "reset"; return paintAuth(); }
 
   const user = session.user;
   const lab = (user.email || "").toLowerCase() === LAB_EMAIL;

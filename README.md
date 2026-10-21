@@ -44,6 +44,8 @@ Buka **SQL Editor → New query**, tempel isi tiap file, lalu **Run**, berurutan
 3. `db/03_seed.sql` — 26 pengurus, 6 divisi, dan tugas divisi
 4. `db/04_contoh_program.sql` — **opsional**, 9 program kerja contoh supaya aplikasi tidak
    kosong saat pertama dibuka. Lewati kalau mau langsung isi proker asli.
+5. `db/10_task_deadline.sql` — tenggat tugas divisi. Tanpa ini, isian tenggat tidak muncul
+   dan tugas divisi tidak masuk kalender.
 
 Kalau alamat akun lab bukan `forestylab@gmail.com`, ubah dulu di fungsi `lab_email()`
 pada `02_rls.sql` sebelum dijalankan.
@@ -95,6 +97,20 @@ atau GitHub Pages. Tidak ada proses build — semuanya file statis.
 
 Setelah dapat alamatnya, tambahkan ke **Supabase → Authentication → URL Configuration → Site URL**.
 
+### 8. Lupa password
+
+Di halaman Sign In ada **Forgot password?**: isi email, Supabase mengirim link reset, link itu
+membuka layar **Set New Password** di web ini. Supaya linknya kembali ke alamat yang benar,
+daftarkan semua alamat web di **Authentication → URL Configuration → Redirect URLs**, misalnya:
+
+- `http://localhost:5173/**` dan `http://127.0.0.1:5173/**` untuk uji coba
+- `https://<alamat-vercel>/**` untuk pemakaian sehari-hari
+
+Pengirim email bawaan Supabase hanya untuk uji coba: kuotanya kecil (beberapa email per jam)
+dan hanya mengirim ke alamat anggota tim proyek Supabase. Untuk semua pengurus, pasang SMTP
+sendiri di **Authentication → Emails → SMTP Settings** — misalnya Gmail lab dengan App Password,
+atau Resend.
+
 ---
 
 ## Integrasi Gmail
@@ -103,8 +119,9 @@ Setelah dapat alamatnya, tambahkan ke **Supabase → Authentication → URL Conf
 Edge Function menolak panggilan dari akun selain akun lab — jadi isi kotak masuk tidak bocor
 walau seseorang memanggil endpoint-nya langsung.
 
-Untuk akun lab, menu Inbox menampilkan 15 email terbaru — pengirim, subjek, cuplikan, waktu,
-dan tanda belum dibaca. Klik salah satu untuk membuka dan membalasnya di Gmail. Email belum
+Untuk akun lab, menu Inbox menampilkan 25 email terbaru — pengirim, subjek, cuplikan, waktu,
+dan tanda belum dibaca. Tombol **Load older email** di bawah daftar mengambil 25 berikutnya,
+jadi seluruh isi kotak masuk bisa ditelusuri. Klik salah satu untuk membuka dan membalasnya di Gmail. Email belum
 dibaca juga muncul sebagai badge di menu Inbox, di lonceng notifikasi, dan sebagai baris
 tersendiri di halaman Notification.
 
@@ -120,14 +137,17 @@ catatan bahwa integrasi belum aktif.
 1. [console.cloud.google.com](https://console.cloud.google.com) → **New Project**, misal `foresty-lab`
 2. **APIs & Services → Library** → cari **Gmail API** → **Enable**
 3. **OAuth consent screen** → User type **External** → isi nama aplikasi dan email dukungan
-   → **Audience: Testing** → tambahkan `forestylab@gmail.com` sebagai **Test user**
+   → tambahkan `forestylab@gmail.com` sebagai **Test user**
+   → **Audience → Publish app** sampai statusnya **In production**
 4. **Credentials → Create Credentials → OAuth client ID**
    - Application type: **Web application**
    - Authorized redirect URI: `http://localhost:53682/callback`
    - Simpan **Client ID** dan **Client Secret**
 
-Mode Testing sudah cukup selamanya untuk pemakaian internal; tidak perlu proses verifikasi
-Google karena yang mengotorisasi cuma satu akun.
+**Statusnya harus In production.** Selama masih Testing, Google membuat refresh token kedaluwarsa
+setelah 7 hari dan Inbox berhenti dengan pesan "The Gmail refresh token is no longer valid".
+In production tidak perlu proses verifikasi Google karena yang mengotorisasi cuma satu akun;
+layar persetujuannya hanya menampilkan peringatan aplikasi belum diverifikasi.
 
 ### 2. Ambil refresh token
 
@@ -163,10 +183,11 @@ Refresh halaman Inbox — email langsung muncul.
 
 | Pesan | Artinya |
 |---|---|
-| "Edge function gmail-inbox belum di-deploy" | Langkah 3 belum jalan |
-| "Integrasi Gmail belum dipasang di server" | Function sudah ada, `GOOGLE_REFRESH_TOKEN` belum di-set |
-| "Google menolak refresh token" | Token dicabut atau salah. Ulangi langkah 2 |
-| "Kotak masuk hanya dapat diakses akun lab" | Yang memanggil bukan akun lab — memang begitu perilakunya |
+| "The gmail-inbox edge function has not been deployed" | Langkah 3 belum jalan |
+| "Gmail integration is not set up on the server" | Function sudah ada, `GOOGLE_REFRESH_TOKEN` belum di-set |
+| "The Gmail refresh token is no longer valid" | Token kedaluwarsa (aplikasi masih Testing), dicabut, atau password Google diganti. Pastikan In production, ulangi langkah 2, lalu set ulang `GOOGLE_REFRESH_TOKEN` dan deploy ulang |
+| "Google rejected the refresh token" | Client ID/secret tidak cocok dengan token. Ulangi langkah 2 dengan client yang sama |
+| "The inbox is only available to the lab account" | Yang memanggil bukan akun lab — memang begitu perilakunya |
 
 Isi kotak masuk di-cache 45 detik di server dan ditarik ulang otomatis tiap 3 menit, jadi kuota
 Gmail API aman. Tombol **Muat ulang** memaksa ambil data baru.

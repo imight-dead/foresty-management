@@ -27,8 +27,10 @@ const json = (body: unknown, status = 200) =>
   });
 
 /* ---- cache kecil supaya Gmail tidak dipanggil tiap kali halaman dibuka ---- */
-let cache: { at: number; data: unknown } | null = null;
+/* hanya halaman pertama yang di-cache; halaman lanjutan selalu diambil langsung */
+let cache: { at: number; data: unknown; next: string | null } | null = null;
 const CACHE_MS = 45_000;
+const PAGE_SIZE = 25;
 
 /* ---- access token dari refresh token (berlaku 1 jam, di-cache) ---- */
 let tokenCache: { at: number; token: string } | null = null;
@@ -49,7 +51,16 @@ async function accessToken(): Promise<string> {
     body,
   });
   const j = await r.json();
-  if (!r.ok) throw new Error("Google menolak refresh token: " + (j.error_description || j.error || r.status));
+  /* invalid_grant: token dicabut, password Google diganti, atau aplikasi
+     OAuth masih berstatus Testing (token kedaluwarsa setelah 7 hari). */
+  if (j.error === "invalid_grant") {
+    throw new Error(
+      "The Gmail refresh token is no longer valid. Make sure the OAuth app is In production, " +
+      "create a new token with gmail/get-refresh-token.mjs, then set GOOGLE_REFRESH_TOKEN again. " +
+      "Steps are in the README under Integrasi Gmail.",
+    );
+  }
+  if (!r.ok) throw new Error("Google rejected the refresh token: " + (j.error_description || j.error || r.status));
 
   tokenCache = { at: Date.now(), token: j.access_token };
   return j.access_token;
@@ -65,14 +76,15 @@ function parseFrom(raw: string) {
   return { name: raw.trim(), email: raw.trim() };
 }
 
-async function fetchInbox(max: number) {
+/* Satu halaman kotak masuk. pageToken dari halaman sebelumnya mengambil
+   email yang lebih lama, jadi seluruh isi INBOX bisa ditelusuri. */
+async function fetchInbox(max: number, pageToken?: string | null) {
   const token = await accessToken();
   const auth = { Authorization: `Bearer ${token}` };
 
-  const listRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}&labelIds=INBOX`,
-    { headers: auth },
-  );
+  const q = new URLSearchParams({ maxResults: String(max), labelIds: "INBOX" });
+  if (pageToken) q.set("pageToken", pageToken);
+  const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${q}`, { headers: auth });
   const list = await listRes.json();
   if (!listRes.ok) throw new Error("Gmail API: " + (list.error?.message || listRes.status));
 
@@ -93,14 +105,14 @@ async function fetchInbox(max: number) {
       threadId: m.threadId,
       from: from.name,
       fromEmail: from.email,
-      subject: header(hs, "Subject") || "(tanpa subjek)",
+      subject: header(hs, "Subject") || "(no subject)",
       snippet: (m.snippet ?? "").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
       date: new Date(Number(m.internalDate)).toISOString(),
       unread: (m.labelIds ?? []).includes("UNREAD"),
     };
   }));
 
-  return messages.filter(Boolean);
+  return { messages: messages.filter(Boolean), next: (list.nextPageToken as string) ?? null };
 }
 
 Deno.serve(async (req) => {
@@ -109,7 +121,7 @@ Deno.serve(async (req) => {
   try {
     /* ---- 1. siapa yang memanggil ---- */
     const jwt = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-    if (!jwt) return json({ error: "Tidak ada sesi." }, 401);
+    if (!jwt) return json({ error: "No session." }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -117,7 +129,7 @@ Deno.serve(async (req) => {
     const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${jwt}`, apikey: anonKey },
     });
-    if (!userRes.ok) return json({ error: "Sesi tidak sah." }, 401);
+    if (!userRes.ok) return json({ error: "Invalid session." }, 401);
     const user = await userRes.json();
 
     const labEmail = (Deno.env.get("LAB_EMAIL") ?? "forestylab@gmail.com").toLowerCase();
@@ -126,23 +138,29 @@ Deno.serve(async (req) => {
     /* Kotak masuk lab hanya untuk akun lab. Pengurus lain tidak melihat menu
        Inbox sama sekali, dan kalau memanggil endpoint ini langsung, ditolak
        di sini — bukan sekadar disembunyikan di tampilan. */
-    if (!isLab) return json({ error: "Kotak masuk hanya dapat diakses akun lab." }, 403);
+    if (!isLab) return json({ error: "The inbox is only available to the lab account." }, 403);
 
     /* ---- 2. belum dikonfigurasi? katakan apa adanya ---- */
     if (!Deno.env.get("GOOGLE_REFRESH_TOKEN")) {
-      return json({ messages: [], configured: false, error: "Integrasi Gmail belum dipasang di server." });
+      return json({ messages: [], configured: false, error: "Gmail integration is not set up on the server." });
     }
 
     /* ---- 3. ambil kotak masuk ---- */
     const url = new URL(req.url);
     const force = url.searchParams.get("refresh") === "1";
+    const page = url.searchParams.get("page");
+
+    if (page) {
+      const { messages, next } = await fetchInbox(PAGE_SIZE, page);
+      return json({ messages, next, configured: true, cached: false });
+    }
     if (!force && cache && Date.now() - cache.at < CACHE_MS) {
-      return json({ messages: cache.data, configured: true, cached: true });
+      return json({ messages: cache.data, next: cache.next, configured: true, cached: true });
     }
 
-    const messages = await fetchInbox(15);
-    cache = { at: Date.now(), data: messages };
-    return json({ messages, configured: true, cached: false });
+    const { messages, next } = await fetchInbox(PAGE_SIZE);
+    cache = { at: Date.now(), data: messages, next };
+    return json({ messages, next, configured: true, cached: false });
   } catch (e) {
     return json({ messages: [], configured: true, error: String(e?.message ?? e) }, 200);
   }

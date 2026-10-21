@@ -319,7 +319,7 @@ function pushPanel() {
       <div style="flex:1;min-width:200px">
         <div class="label">Device Notifications ${PUSH.on ? '<span class="tag t-completed" style="margin-left:6px">On</span>' : '<span class="tag t-soon" style="margin-left:6px">Off</span>'}</div>
         <div class="meta" style="margin-top:4px">${PUSH.on
-          ? "This device receives H-3, H-1, and same-day reminders for programs and meetings, even when the app is closed."
+          ? "This device receives H-3, H-1, and same-day reminders for programs and meetings, plus your division's task deadlines, even when the app is closed."
           : "Turn this on to get program and meeting reminders on this phone or laptop."}</div>
       </div>
       <button class="btn${PUSH.on ? " ghost" : ""}" data-push="${PUSH.on ? "off" : "on"}"${PUSH.busy ? " disabled" : ""}>
@@ -395,6 +395,28 @@ function buildNotifs() {
       });
     }
   }
+  /* Tenggat tugas divisi: hanya divisi saya (akun lab: semua), sama dengan
+     kalender. H-1 dan hari-H pukul 07.00, lalu "Overdue" setelah lewat.
+     Kuncinya sama dengan yang dipakai push-send. */
+  for (const d of myDivisions())
+    for (const p of d.people)
+      for (const t of p.tasks) {
+        const due = taskDue(t);
+        if (!due || t.status === "done") continue;
+        const late = due < now, who = esc(byId(p.m)?.name || "-");
+        for (const r of late ? [] : [{ d: 1, l: "H-1" }, { d: 0, l: "H-0" }]) {
+          const fire = new Date(due); fire.setDate(fire.getDate() - r.d); fire.setHours(7, 0, 0, 0);
+          if (fire > now || (r.d === 0 && fire >= due)) continue;
+          out.push({
+            id: `task:${t.id}:${t.due_at}:${r.l}`, trig: r.l, fire, did: d.id, kind: "task",
+            text: `Due ${r.d ? "tomorrow" : "today"}: division task <b>${esc(t.text)}</b>, ${fDate(due)} at ${fTime(due)}. ${esc(d.name)} · ${who}.`,
+          });
+        }
+        if (late) out.push({
+          id: `task:${t.id}:${t.due_at}:late`, trig: "OVERDUE", fire: due, did: d.id, kind: "task",
+          text: `Overdue: division task <b>${esc(t.text)}</b> passed its deadline ${fDate(due)} at ${fTime(due)}. ${esc(d.name)} · ${who}.`,
+        });
+      }
   for (const mt of MEETINGS) {
     for (const r of RULES) {
       const fire = new Date(mt.held); fire.setDate(fire.getDate() - r.d); fire.setHours(7, 0, 0, 0);
@@ -1088,7 +1110,7 @@ function viewNotification() {
   const ns = buildNotifs();
   const rows = ns.map(n => {
     const un = !NREAD.has(n.id);
-    return `<button class="nrow${un ? " unread" : ""}" data-notif="${n.id}" ${n.mid ? `data-mid="${n.mid}"` : `data-pid="${n.pid}"`}>
+    return `<button class="nrow${un ? " unread" : ""}" data-notif="${n.id}" ${n.mid ? `data-mid="${n.mid}"` : n.did ? `data-did="${n.did}"` : `data-pid="${n.pid}"`}>
       <span class="ni"><svg viewBox="0 0 24 24">${n.kind === "task"
         ? '<path d="M4 6h16M4 12h16M4 18h10"/>'
         : n.kind === "meeting"
@@ -1617,7 +1639,7 @@ document.addEventListener("click", e => {
     return render();
   }
   if (d.day) { calSel = calSel === d.day ? null : d.day; return render(); }
-  if (d.notif) { markRead([d.notif]); return d.mid ? showModal("minute", d.mid) : showModal("prog", d.pid); }
+  if (d.notif) { markRead([d.notif]); return d.mid ? showModal("minute", d.mid) : d.did ? showModal("div", d.did) : showModal("prog", d.pid); }
   if (d.readall !== undefined) return markRead(buildNotifs().map(n => n.id));
 });
 
@@ -1893,17 +1915,28 @@ async function paintAuth() {
   wireAuthForms();
 }
 
-/* Pesan gagal masuk. Status persetujuan (menunggu / ditolak) baru bisa
-   ditampilkan SETELAH email dan password cocok, jadi kalau password salah
-   yang muncul tetap "tidak cocok" — termasuk untuk akun yang belum disetujui. */
-function loginError(e) {
+/* Pesan gagal masuk. Supabase memberi error yang sama untuk email yang
+   belum terdaftar dan password yang salah, jadi statusnya ditanyakan ke
+   account_status() (db/11_account_status.sql). Kalau fungsi itu belum
+   dipasang, pesannya kembali ke "tidak cocok" yang umum. */
+async function loginError(e, email) {
   if (e.code === "email_not_confirmed" || /not confirmed/i.test(e.message || ""))
     return "This account's email has not been confirmed yet. Ask the lab account to confirm it in Supabase → Authentication → Users.";
   if (e.status === 429 || /rate limit|too many/i.test(e.message || ""))
     return "Too many sign-in attempts. Wait a few minutes, then try again.";
-  if (e.code === "invalid_credentials" || /invalid login credentials/i.test(e.message || ""))
-    return "Email or password does not match. If you registered before with this email, its first password still applies — use Forgot password? to set a new one.";
-  return "Could not sign in: " + (e.message || e);
+  if (!(e.code === "invalid_credentials" || /invalid login credentials/i.test(e.message || "")))
+    return "Could not sign in: " + (e.message || e);
+
+  const lupa = "Use Forgot password? if you don't remember it.";
+  const { data: st, error } = await sb.rpc("account_status", { p_email: email });
+  if (error) return "Email or password does not match. " + lupa;
+  if (st === "none")
+    return `${email} is not registered yet. Register first, then ask the lab account (${LAB_EMAIL}) to approve it.`;
+  if (st === "pending")
+    return `Wrong password. This account is also still waiting for approval — contact the lab account (${LAB_EMAIL}). ${lupa}`;
+  if (st === "rejected")
+    return `Wrong password. This account's registration was rejected — contact the lab account (${LAB_EMAIL}). ${lupa}`;
+  return "Wrong password. " + lupa;
 }
 
 /* nama sudah dipegang akun lain, atau email ini sudah pernah mendaftar */
@@ -1925,8 +1958,12 @@ function wireAuthForms() {
     const { error } = await sb.auth.signInWithPassword({
       email: $("#li-email").value.trim(), password: $("#li-pass").value,
     });
+    if (error) {
+      authErr = await loginError(error, $("#li-email").value.trim());
+      btn.disabled = false; btn.textContent = "Sign In";
+      authScreen = "login"; return paintAuth();
+    }
     btn.disabled = false; btn.textContent = "Sign In";
-    if (error) { authErr = loginError(error); authScreen = "login"; return paintAuth(); }
     gate();
   });
 

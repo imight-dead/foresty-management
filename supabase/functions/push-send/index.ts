@@ -64,7 +64,9 @@ const ROOM_OF_DIV: Record<string, string> = {
   "Research & Development": "rnd",
 };
 
-type Job = { key: string; title: string; body: string; url: string; room?: string };
+/* room: hanya anggota ruang rapat itu. to: hanya pengurus dengan member id
+   di daftar ini (anggota divisi). Akun lab selalu ikut menerima. */
+type Job = { key: string; title: string; body: string; url: string; room?: string; to?: string[] };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok");
@@ -90,10 +92,14 @@ Deno.serve(async (req) => {
 
   try {
     /* ---------------- data ---------------- */
-    const [programs, checklist, meetings, members, profiles, subs, log] = await Promise.all([
+    const [programs, checklist, meetings, tasks, divisions, divMembers, members, profiles, subs, log] = await Promise.all([
       api("programs?select=id,title,status,starts_at,place"),
       api("checklist?select=id,program_id,text,member_id,due_at,done"),
       api("meetings?select=id,room,title,held_at,place").catch(() => []),
+      /* kolom due_at baru ada setelah db/10_task_deadline.sql */
+      api("tasks?select=id,division_id,member_id,text,status,due_at&due_at=not.is.null").catch(() => []),
+      api("divisions?select=id,name"),
+      api("division_members?select=division_id,member_id"),
       api("members?select=id,name,div,level"),
       api("profiles?select=user_id,member_id,status&status=eq.approved"),
       api("push_subs?select=endpoint,user_id,p256dh,auth"),
@@ -169,6 +175,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* Tenggat tugas divisi: H-1 dan hari-H pukul 07.00 WIB, ke anggota
+       divisinya. Kunci memuat due_at, jadi kalau tenggatnya dipindah,
+       pengingatnya dikirim lagi untuk tanggal yang baru. */
+    for (const t of tasks) {
+      if (t.status === "done" || !t.due_at) continue;
+      const due = new Date(t.due_at);
+      const div: any = divisions.find((d: any) => d.id === t.division_id);
+      const to = divMembers.filter((x: any) => x.division_id === t.division_id).map((x: any) => x.member_id);
+      const who: any = memberById.get(t.member_id);
+      for (const r of [{ d: 1, l: "H-1" }, { d: 0, l: "H-0" }]) {
+        const key = `task:${t.id}:${t.due_at}:${r.l}`;
+        if (sentKeys.has(key)) continue;
+        const fire = fireAt(due, r.d).getTime();
+        if (fire > now || now - fire > MAX_AGE || fire >= due.getTime()) continue;
+        jobs.push({
+          key, title: `Task due ${r.d ? "tomorrow" : "today"} · ${div ? div.name : "Division"}`,
+          body: `"${t.text}" is due ${fDate(due)} at ${fTime(due)}. Assigned to ${who ? who.name : "-"}.`,
+          url: "./#division", to,
+        });
+      }
+    }
+
     for (const mt of meetings) {
       const when = new Date(mt.held_at);
       if (when.getTime() < now) continue;
@@ -234,6 +262,8 @@ async function deliver(
       for (const s of subs) {
         if (!approved(s.user_id)) continue;
         if (job.room && !roomsOf(s.user_id).includes(job.room)) continue;
+        if (job.to && !(labUser && s.user_id === labUser) &&
+            !job.to.includes(profiles.find((p: any) => p.user_id === s.user_id)?.member_id)) continue;
 
         try {
           await webpush.sendNotification(

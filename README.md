@@ -46,6 +46,8 @@ Buka **SQL Editor → New query**, tempel isi tiap file, lalu **Run**, berurutan
    kosong saat pertama dibuka. Lewati kalau mau langsung isi proker asli.
 5. `db/10_task_deadline.sql` — tenggat tugas divisi. Tanpa ini, isian tenggat tidak muncul
    dan tugas divisi tidak masuk kalender.
+6. `db/11_account_status.sql` — pesan gagal masuk yang membedakan email belum terdaftar,
+   password salah, dan akun yang masih menunggu persetujuan.
 
 Kalau alamat akun lab bukan `forestylab@gmail.com`, ubah dulu di fungsi `lab_email()`
 pada `02_rls.sql` sebelum dijalankan.

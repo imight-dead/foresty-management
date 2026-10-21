@@ -1,7 +1,7 @@
 /**
  * Buat sepasang kunci VAPID untuk Web Push — dijalankan SEKALI saja.
  *
- *   node push/gen-vapid.mjs
+ *   node scripts/gen-vapid.mjs
  *
  * Kunci publik dipasang di app/config.js (aman terlihat publik).
  * Kunci privat disimpan sebagai secret Supabase, jangan masuk git,

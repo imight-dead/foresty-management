@@ -80,7 +80,7 @@ const TAGLINE = {
 };
 
 async function loadAll() {
-  const [mem, div, dmem, tsk, prg, pic, chk, log, nrd, mtg, due] = await Promise.all([
+  const [mem, div, dmem, tsk, prg, pic, chk, log, nrd, mtg, due, dsc] = await Promise.all([
     sb.from("members").select("*").order("sort"),
     sb.from("divisions").select("*").order("sort"),
     sb.from("division_members").select("*").order("sort"),
@@ -92,6 +92,7 @@ async function loadAll() {
     sb.from("notif_read").select("notif_key"),
     sb.from("meetings").select("*").order("held_at", { ascending: false }),
     sb.from("tasks").select("due_at").limit(1),
+    sb.from("tasks").select("descr").limit(1),
   ]);
   for (const r of [mem, div, dmem, tsk, prg, pic, chk, log, nrd])
     if (r.error) throw r.error;
@@ -120,14 +121,16 @@ async function loadAll() {
 
   NREAD = new Set(nrd.data.map(r => r.notif_key));
 
-  /* Tabel meetings baru ada setelah db/06_notulen.sql dijalankan.
+  /* Tabel meetings baru ada setelah db/04_notulen.sql dijalankan.
      Selama belum, menu Notulen tampil kosong, sisanya tetap jalan. */
   MEETINGS = mtg.error ? [] : mtg.data.map(m => ({ ...m, held: new Date(m.held_at) }));
   meetingsReady = !mtg.error;
 
-  /* Kolom tasks.due_at baru ada setelah db/10_task_deadline.sql dijalankan.
+  /* Kolom tasks.due_at baru ada setelah db/07_task_deadline.sql dijalankan.
      Selama belum, isian tenggat disembunyikan, sisanya tetap jalan. */
   taskDueReady = !due.error;
+  /* kolom tasks.descr baru ada setelah db/10_task_description.sql */
+  taskDescReady = !dsc.error;
 }
 
 /* menulis jejak perubahan; gagal pun tidak membatalkan aksi utama */
@@ -171,10 +174,14 @@ async function addCheck(pid, text, who) {
   toast("Checklist item added.");
 }
 
-async function addTask(did, mid, text, due) {
+const taskOf = (did, mid, tid) =>
+  DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks.find(x => x.id === tid);
+
+async function addTask(did, mid, text, due, descr) {
   if (!canTask(mid)) return toast("You can only add tasks under your own name.", true);
   const row = { division_id: did, member_id: mid, text, created_by: ME.user.id };
   if (due) row.due_at = due.toISOString();
+  if (descr) row.descr = descr;
   const { data, error } = await sb.from("tasks").insert(row).select().single();
   if (error) return fail(error, "Could not add the task");
   DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks.push(data);
@@ -182,17 +189,35 @@ async function addTask(did, mid, text, due) {
   toast(due ? `Task added, due ${fDate(due)} at ${fTime(due)}.` : "Task added.");
 }
 
-/* due = null menghapus tenggat */
-async function setTaskDue(did, mid, tid, due) {
+/* Simpan isian form edit tugas. Tanggal dikosongkan = tenggat dihapus. */
+async function saveTask(did, mid, tid, f) {
   if (!canTask(mid)) return toast("You can only change tasks assigned to you.", true);
-  const t = DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks.find(x => x.id === tid);
-  const prev = t.due_at;
-  t.due_at = due ? due.toISOString() : null;
-  dueEdit = null;
+  const t = taskOf(did, mid, tid);
+  const text = f.text.value.trim();
+  if (!text) return toast("The task name cannot be empty.", true);
+  const patch = { text };
+  if (taskDueReady) { const due = readDue(f); patch.due_at = due ? due.toISOString() : null; }
+  if (taskDescReady) patch.descr = f.descr.value.trim();
+  const prev = { ...t };
+  Object.assign(t, patch);
+  taskEdit = null;
   rerender();
-  const { error } = await sb.from("tasks").update({ due_at: t.due_at }).eq("id", tid);
-  if (error) { t.due_at = prev; rerender(); return fail(error, "Could not save the deadline"); }
-  toast(due ? `Deadline set to ${fDate(due)} at ${fTime(due)}.` : "Deadline removed.");
+  const { error } = await sb.from("tasks").update(patch).eq("id", tid);
+  if (error) { Object.assign(t, prev); rerender(); return fail(error, "Could not save the task"); }
+  toast("Task saved.");
+}
+
+async function deleteTask(did, mid, tid) {
+  if (!canTask(mid)) return toast("You can only delete tasks assigned to you.", true);
+  const list = DIVISIONS.find(x => x.id === did).people.find(x => x.m === mid).tasks;
+  const t = list.find(x => x.id === tid);
+  if (!confirm(`Delete the task "${t.text}"? This cannot be undone.`)) return;
+  const { error } = await sb.from("tasks").delete().eq("id", tid);
+  if (error) return fail(error, "Could not delete the task");
+  list.splice(list.indexOf(t), 1);
+  taskEdit = null;
+  rerender();
+  toast("Task deleted.");
 }
 
 /* Tanggal wajib, jam boleh kosong — tanpa jam, tenggatnya akhir hari itu. */
@@ -331,7 +356,8 @@ function pushPanel() {
 /* ---------------------------------------------------------------- notulen */
 let meetingsReady = true;
 let taskDueReady = true;
-let dueEdit = null;   // id tugas yang isian tenggatnya sedang terbuka
+let taskDescReady = true;
+let taskEdit = null;  // id tugas yang form edit-nya sedang terbuka
 const taskDue = t => t.due_at ? new Date(t.due_at) : null;
 
 /* Divisi yang tenggat tugasnya masuk kalender saya: divisi tempat saya
@@ -436,7 +462,7 @@ function allEvents() {
   const now = new Date();
   const ev = PROGRAMS.map(p => ({ when: p.date, title: p.title, pid: p.id, type: p.status, sub: p.place }));
   /* Rapat hanya dari ruang yang jadi hak saya (lihat myRooms). RLS di
-     06_notulen.sql sudah menyaringnya; ini menegaskannya di kalender. */
+     04_notulen.sql sudah menyaringnya; ini menegaskannya di kalender. */
   const rooms = myRooms();
   MEETINGS.filter(m => rooms.includes(m.room)).forEach(m => ev.push({
     when: m.held, title: m.title, mid: m.id,
@@ -557,11 +583,13 @@ const MENU = [
 const LAB_MENU = [
   { id:"inbox",    label:"Inbox",    icon:'<path d="M3 5h18v14H3z"/><path d="M3 6l9 7 9-7"/>' },
   { id:"approval", label:"Approval", icon:'<path d="M4 12l5 5L20 6"/><path d="M4 5h9"/>' },
+  { id:"log",      label:"Log",      icon:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' },
 ];
 const visibleMenu = () => isLab() ? MENU.concat(LAB_MENU) : MENU;
 
 let route = "dashboard";
 function go(r) {
+  if (r === "log") LOG.loaded = false;   /* tiap membuka menu Log, ambil yang terbaru */
   route = r; location.hash = r; render(); window.scrollTo({ top: 0 });
   $("#sidebar").classList.remove("open");
   const sc = $("#sideScrim"); if (sc) sc.hidden = true;
@@ -953,27 +981,37 @@ function dueNote(t) {
 function taskRow(did, mid, t) {
   const can = canTask(mid);
   const row = `<button class="task${t.status === "done" ? " done" : ""}${can ? "" : " locked"}" data-task="${did}|${mid}|${t.id}">
-    <span class="st ${t.status}"></span><span class="tx">${esc(t.text)}${dueNote(t)}</span><span class="stl">${ST_LABEL[t.status]}</span></button>`;
-  if (!can || !taskDueReady) return row;
+    <span class="st ${t.status}"></span><span class="tx">${esc(t.text)}${t.descr ? `<span class="tdesc">${esc(t.descr)}</span>` : ""}${dueNote(t)}</span><span class="stl">${ST_LABEL[t.status]}</span></button>`;
+  if (!can) return row;
 
-  const due = taskDue(t);
-  const btn = `<button class="tdue-btn${dueEdit === t.id ? " on" : ""}" data-taskdue="${t.id}" title="${due ? "Change deadline" : "Set deadline"}" aria-label="${due ? "Change deadline" : "Set deadline"}">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>`;
-  const form = dueEdit !== t.id ? "" : `<form class="addrow duerow" data-taskdueform="${did}|${mid}|${t.id}">
-      <input class="ainput" type="date" name="tgl" value="${due ? dInput(due) : ""}" required aria-label="Deadline date">
-      <input class="ainput" type="time" name="jam" value="${due ? tInput(due) : ""}" aria-label="Deadline time">
-      <button class="btn sm" type="submit">Save</button>
-      ${due ? `<button class="btn sm ghost" type="button" data-taskdueclear="${did}|${mid}|${t.id}">Remove</button>` : ""}
+  const open = taskEdit === t.id, due = taskDue(t);
+  const btn = `<button class="tdue-btn${open ? " on" : ""}" data-taskedit="${t.id}" title="Edit or delete task" aria-label="Edit or delete task">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>`;
+  const form = !open ? "" : `<form class="taskform" data-taskform="${did}|${mid}|${t.id}">
+      <input class="ainput" name="text" value="${esc(t.text)}" placeholder="Task name" required aria-label="Task name">
+      ${taskDescReady ? `<textarea class="ainput" name="descr" rows="3" placeholder="Description (optional)" aria-label="Description">${esc(t.descr || "")}</textarea>` : ""}
+      ${taskDueReady ? `<div class="tdrow">
+        <input class="ainput" type="date" name="tgl" value="${due ? dInput(due) : ""}" aria-label="Deadline date (empty = no deadline)" title="Deadline date — leave empty for no deadline">
+        <input class="ainput" type="time" name="jam" value="${due ? tInput(due) : ""}" aria-label="Deadline time" title="Deadline time (default 23:59)">
+      </div>` : ""}
+      <div class="tfbtns">
+        <button class="btn sm" type="submit">Save</button>
+        <button class="btn sm ghost" type="button" data-taskedit="${t.id}">Cancel</button>
+        <button class="btn sm danger" type="button" data-taskdel="${did}|${mid}|${t.id}">Delete</button>
+      </div>
     </form>`;
   return `<div class="trow">${row}${btn}</div>${form}`;
 }
 
 const addTaskForm = (did, mid) => canTask(mid)
-  ? `<form class="addrow" data-addtask="${did}|${mid}">
-       <input class="ainput" name="text" placeholder="Add a task..." required>
-       ${taskDueReady ? `<input class="ainput due" type="date" name="tgl" title="Deadline (optional)" aria-label="Deadline date (optional)">
-       <input class="ainput due" type="time" name="jam" title="Deadline time (optional, default 23:59)" aria-label="Deadline time (optional)">` : ""}
-       <button class="btn sm" type="submit">+</button></form>` : "";
+  ? `<form class="taskform add" data-addtask="${did}|${mid}">
+       <input class="ainput" name="text" placeholder="Add a task..." required aria-label="Task name">
+       ${taskDescReady ? `<textarea class="ainput" name="descr" rows="2" placeholder="Description (optional)" aria-label="Description (optional)"></textarea>` : ""}
+       <div class="tdrow">
+         ${taskDueReady ? `<input class="ainput" type="date" name="tgl" title="Deadline (optional)" aria-label="Deadline date (optional)">
+         <input class="ainput" type="time" name="jam" title="Deadline time (optional, default 23:59)" aria-label="Deadline time (optional)">` : ""}
+         <button class="btn sm" type="submit">+ Add</button>
+       </div></form>` : "";
 
 function modalDivision(did) {
   const d = DIVISIONS.find(x => x.id === did);
@@ -1180,7 +1218,7 @@ function viewMinutes() {
     </button>`;
   }).join("") || `<div class="empty">${meetingsReady
       ? "No meetings in this room yet."
-      : "The meetings table has not been created. Run db/06_notulen.sql in Supabase."}</div>`;
+      : "The meetings table has not been created. Run db/04_notulen.sql in Supabase."}</div>`;
 
   return `<div class="sec-head" style="justify-content:space-between">
       <div><div class="kick">Schedule &amp; Minutes</div><h1>Meeting</h1>
@@ -1439,6 +1477,170 @@ async function loadMoreMail() {
   render();
 }
 
+/* ---------------------------------------------------------------- LOG */
+/* Semua perubahan data lab, dicatat trigger di db/09_audit_log.sql.
+   Hanya akun lab yang bisa membacanya (RLS). Pencarian dijalankan di
+   server lewat kolom audit_log.search, jadi mencakup seluruh riwayat,
+   bukan hanya baris yang sudah dimuat. */
+let LOG = { rows: [], q: "", type: "", loaded: false, loading: false, more: false, end: false, error: null, open: new Set() };
+const LOG_PAGE = 40;
+const LOG_TYPES = {
+  tasks: "Division task", checklist: "Checklist item", programs: "Program", program_pics: "Program PIC",
+  meetings: "Meeting", profiles: "Account", members: "Member", divisions: "Division", division_members: "Division member",
+};
+
+async function loadLog(reset) {
+  if (!isLab() || LOG.loading) return;
+  LOG.loading = true;
+  if (reset) { LOG.rows = []; LOG.end = false; LOG.open.clear(); }
+  paintLog();
+  let q = sb.from("audit_log").select("id,at,actor,actor_email,actor_name,tbl,op,row_id,old_data,new_data")
+    .order("at", { ascending: false }).order("id", { ascending: false })
+    .range(LOG.rows.length, LOG.rows.length + LOG_PAGE - 1);
+  if (LOG.type) q = q.eq("tbl", LOG.type);
+  /* tiap kata harus ada; % dan _ diperlakukan sebagai huruf biasa */
+  for (const w of LOG.q.toLowerCase().split(/\s+/).filter(Boolean))
+    q = q.ilike("search", `%${w.replace(/[\\%_]/g, c => "\\" + c)}%`);
+  const { data, error } = await q;
+  LOG.loading = false; LOG.loaded = true;
+  if (error) {
+    LOG.error = /audit_log|42P01|PGRST205|schema cache/i.test(`${error.code} ${error.message}`)
+      ? "The log table does not exist yet. Run db/09_audit_log.sql in Supabase → SQL Editor."
+      : error.message;
+  } else {
+    LOG.error = null;
+    LOG.rows.push(...data);
+    LOG.end = data.length < LOG_PAGE;
+  }
+  paintLog();
+}
+
+/* nilai satu kolom untuk dibaca manusia */
+function logVal(k, v) {
+  if (v === null || v === undefined || v === "") return "—";
+  if (k === "member_id") return byId(v)?.name || v;
+  if (k === "program_id") return prog(v)?.title || v;
+  if (k === "division_id") return DIVISIONS.find(d => d.id === v)?.name || v;
+  if (k === "status") return ST_LABEL[v] || STATUS_LABEL[v] || v;
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) { const d = new Date(v); return `${fShort(d)} ${fTime(d)}`; }
+  const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  return s.length > 160 ? s.slice(0, 157) + "…" : s;
+}
+
+/* nama baris yang berubah, misalnya judul program atau teks tugas */
+function logSubject(l) {
+  const r = l.new_data || l.old_data || {};
+  const who = id => byId(id)?.name || id || "-";
+  switch (l.tbl) {
+    case "tasks":            return `"${r.text}" for ${who(r.member_id)}`;
+    case "checklist":        return `"${r.text}" on ${prog(r.program_id)?.title || "a program"}`;
+    case "programs":         return `"${r.title}"`;
+    case "program_pics":     return `${who(r.member_id)} as PIC of ${prog(r.program_id)?.title || "a program"}`;
+    case "meetings":         return `"${r.title}"`;
+    case "profiles":         return `${r.email} (${who(r.member_id)})`;
+    case "members":          return r.name;
+    case "divisions":        return r.name;
+    case "division_members": return `${who(r.member_id)} in ${DIVISIONS.find(d => d.id === r.division_id)?.name || r.division_id}`;
+    default:                 return r.title || r.text || r.name || l.row_id;
+  }
+}
+
+const LOG_SKIP = new Set(["updated_at", "created_at", "decided_at", "decided_by", "done_by", "done_at", "created_by"]);
+function logChanges(l) {
+  if (l.op !== "UPDATE") return [];
+  const o = l.old_data || {}, n = l.new_data || {};
+  return Object.keys(n).filter(k => !LOG_SKIP.has(k) && JSON.stringify(o[k]) !== JSON.stringify(n[k]));
+}
+
+/* satu kalimat: siapa melakukan apa */
+function logSentence(l) {
+  const type = (LOG_TYPES[l.tbl] || l.tbl).toLowerCase();
+  const subj = esc(logSubject(l));
+  const n = l.new_data || {}, o = l.old_data || {}, ch = logChanges(l);
+  if (l.op === "INSERT") return `added ${type} <b>${subj}</b>`;
+  if (l.op === "DELETE") return `deleted ${type} <b>${subj}</b>`;
+  if (l.tbl === "profiles" && ch.includes("status"))
+    return `${n.status === "approved" ? "approved" : n.status === "rejected" ? "rejected" : "set to " + esc(n.status)} account <b>${subj}</b>`;
+  if (l.tbl === "checklist" && ch.length === 1 && ch[0] === "done")
+    return `${n.done ? "ticked" : "unticked"} checklist item <b>${subj}</b>`;
+  if (l.tbl === "tasks" && ch.length === 1 && ch[0] === "status")
+    return `moved ${type} <b>${subj}</b> to <b>${esc(logVal("status", n.status))}</b>`;
+  return `changed ${ch.map(k => esc(k.replace(/_/g, " "))).join(", ") || "something"} on ${type} <b>${subj}</b>`;
+}
+
+function logActor(l) {
+  /* tanpa pengguna: Table Editor / SQL Editor Supabase, cron, atau Edge Function */
+  if (!l.actor) return "System (Supabase)";
+  if ((l.actor_email || "").toLowerCase() === LAB_EMAIL) return "Lab Account";
+  return l.actor_name || l.actor_email || "Unknown user";
+}
+
+function logRow(l) {
+  const open = LOG.open.has(l.id), d = new Date(l.at);
+  const keys = l.op === "UPDATE" ? logChanges(l)
+    : Object.keys(l.new_data || l.old_data || {}).filter(k => !LOG_SKIP.has(k) && k !== "id");
+  const src = l.op === "DELETE" ? l.old_data || {} : l.new_data || {};
+  const detail = !open ? "" : `<div class="logdetail">${keys.map(k => l.op === "UPDATE"
+      ? `<div class="kv"><span class="k">${esc(k.replace(/_/g, " "))}</span><span><s>${esc(logVal(k, (l.old_data || {})[k]))}</s> → ${esc(logVal(k, l.new_data[k]))}</span></div>`
+      : `<div class="kv"><span class="k">${esc(k.replace(/_/g, " "))}</span><span>${esc(logVal(k, src[k]))}</span></div>`).join("")
+    || `<div class="meta">No other details.</div>`}
+    ${l.actor_email ? `<div class="kv"><span class="k">By</span><span>${esc(l.actor_email)}</span></div>` : ""}</div>`;
+  return `<button class="nrow logrow${open ? " open" : ""}" data-logrow="${l.id}">
+    <span class="ni"><span class="op ${l.op.toLowerCase()}">${l.op === "INSERT" ? "+" : l.op === "DELETE" ? "−" : "~"}</span></span>
+    <span style="flex:1;min-width:0">
+      <span class="nt"><b class="who">${esc(logActor(l))}</b> ${logSentence(l)}</span>
+      <span class="nd">${fShort(d)} · ${fTime(d)} · ${esc(LOG_TYPES[l.tbl] || l.tbl)}</span>
+      ${detail}
+    </span>
+  </button>`;
+}
+
+function logList() {
+  if (LOG.error) return `<div class="note">${esc(LOG.error)}</div>`;
+  if (!LOG.loaded || (LOG.loading && !LOG.rows.length)) return `<div class="empty">Loading log…</div>`;
+  if (!LOG.rows.length) return `<div class="empty">${LOG.q || LOG.type ? "No changes match this search." : "No changes recorded yet."}</div>`;
+  return `<div class="stack">${LOG.rows.map(logRow).join("")}</div>
+    ${LOG.end ? `<div class="meta" style="text-align:center;margin-top:14px">End of log.</div>`
+      : `<button class="btn ghost" data-logmore style="width:100%;justify-content:center;margin-top:12px"${LOG.loading ? " disabled" : ""}>${LOG.loading ? "Loading…" : "Load older changes"}</button>`}`;
+}
+
+/* hanya daftarnya yang digambar ulang, supaya kotak pencarian tidak kehilangan fokus */
+function paintLog() {
+  const el = route === "log" && $("#logList");
+  if (el) el.innerHTML = logList();
+}
+
+function viewLog() {
+  if (!isLab()) return `<div class="empty">This page is for the lab account only.</div>`;
+  if (!LOG.loaded && !LOG.loading) setTimeout(() => loadLog(true));
+  return `<div class="sec-head" style="justify-content:space-between">
+      <div><div class="kick">Lab Account Only</div><h1>Log</h1>
+        <p class="sec-sub">Every change to programs, tasks, meetings, members, and accounts — who did it and when.</p></div>
+      <button class="btn ghost" data-logrefresh>Refresh</button>
+    </div>
+    <div class="rule"></div>
+    <div class="logtools">
+      <input id="logq" class="ainput" type="search" placeholder="Search name, email, action, or text… e.g. paul deleted task" value="${esc(LOG.q)}" autocomplete="off" aria-label="Search the log">
+      <select id="logtype" class="ainput" aria-label="Filter by type">
+        <option value="">All types</option>
+        ${Object.entries(LOG_TYPES).map(([k, v]) => `<option value="${k}"${LOG.type === k ? " selected" : ""}>${v}</option>`).join("")}
+      </select>
+    </div>
+    <div id="logList">${logList()}</div>`;
+}
+
+let logT;
+document.addEventListener("input", e => {
+  if (e.target.id !== "logq") return;
+  clearTimeout(logT);
+  logT = setTimeout(() => { LOG.q = e.target.value.trim(); loadLog(true); }, 300);
+});
+document.addEventListener("change", e => {
+  if (e.target.id !== "logtype") return;
+  LOG.type = e.target.value; loadLog(true);
+});
+
 /* ---------------------------------------------------------------- APPROVAL */
 let PENDING = [], ACTIVE = [], REJECTED = [];
 async function loadProfiles() {
@@ -1594,15 +1796,20 @@ function render() {
   const views = { dashboard: viewDashboard, programs: viewPrograms, division: viewDivision,
                   foresty: viewForesty, notification: viewNotification, inbox: viewInbox,
                   minutes: viewMinutes,
-                  approval: viewApproval };
+                  approval: viewApproval, log: viewLog };
+  /* isian yang sedang diketik (misalnya pencarian Log) tetap fokus walau
+     halamannya digambar ulang oleh pembaruan realtime */
+  const act = document.activeElement, keep = act && act.id && $("#view").contains(act)
+    ? { id: act.id, s: act.selectionStart, e: act.selectionEnd } : null;
   $("#view").innerHTML = (views[route] || viewDashboard)();
+  if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch (_) {} } }
   paintUser();
   tickCountdowns();
 }
 
 /* ---------------------------------------------------------------- interaksi */
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-taskdue],[data-taskdueclear],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-mailmore],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push]");
+  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-taskedit],[data-taskdel],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-mailmore],[data-logrow],[data-logmore],[data-logrefresh],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push]");
   if (!t) return;
   const d = t.dataset;
 
@@ -1619,6 +1826,13 @@ document.addEventListener("click", e => {
   if (d.progdel) return deleteProgram(d.progdel);
   if (d.mailrefresh !== undefined) return loadMail(true);
   if (d.mailmore !== undefined) return loadMoreMail();
+  if (d.logmore !== undefined) return loadLog(false);
+  if (d.logrefresh !== undefined) return loadLog(true);
+  if (d.logrow) {
+    const id = Number(d.logrow);
+    LOG.open.has(id) ? LOG.open.delete(id) : LOG.open.add(id);
+    return paintLog();
+  }
   if (d.copy !== undefined) {
     navigator.clipboard?.writeText(d.copy)
       .then(() => toast("Email address copied."), () => toast("The browser refused to copy.", true));
@@ -1631,8 +1845,8 @@ document.addEventListener("click", e => {
   if (d.openMember) return showModal("member", d.openMember);
   if (d.check) { const [pid, cid] = d.check.split("|"); return toggleCheck(pid, cid); }
   if (d.task) { const [did, mid, tid] = d.task.split("|"); return cycleTask(did, mid, tid); }
-  if (d.taskdue) { dueEdit = dueEdit === d.taskdue ? null : d.taskdue; return rerender(); }
-  if (d.taskdueclear) { const [did, mid, tid] = d.taskdueclear.split("|"); return setTaskDue(did, mid, tid, null); }
+  if (d.taskedit) { taskEdit = taskEdit === d.taskedit ? null : d.taskedit; return rerender(); }
+  if (d.taskdel) { const [did, mid, tid] = d.taskdel.split("|"); return deleteTask(did, mid, tid); }
   if (d.cal !== undefined) {
     if (d.cal === "0") { const n = new Date(); calCursor = new Date(n.getFullYear(), n.getMonth(), 1); }
     else calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(d.cal), 1);
@@ -1657,13 +1871,12 @@ document.addEventListener("submit", e => {
     e.preventDefault();
     const [did, mid] = f.dataset.addtask.split("|");
     const txt = f.text.value.trim(); if (!txt) return;
-    addTask(did, mid, txt, readDue(f));
+    addTask(did, mid, txt, readDue(f), f.descr ? f.descr.value.trim() : "");
   }
-  if (f.dataset.taskdueform) {
+  if (f.dataset.taskform) {
     e.preventDefault();
-    const [did, mid, tid] = f.dataset.taskdueform.split("|");
-    const due = readDue(f); if (!due) return;
-    setTaskDue(did, mid, tid, due);
+    const [did, mid, tid] = f.dataset.taskform.split("|");
+    saveTask(did, mid, tid, f);
   }
 });
 
@@ -1761,7 +1974,7 @@ function authShell(inner) {
     <div class="authbox">
       <div class="dots"></div><div class="scan"></div>
       <div class="authhead">
-        <img src="logo.png" alt="Logo Foresty Laboratory" width="46" height="65">
+        <img src="assets/logo.png" alt="Logo Foresty Laboratory" width="46" height="65">
         <div>
           <div class="bt" style="font-family:var(--disp);font-weight:700;letter-spacing:.13em;font-size:15px;line-height:1.15">FORESTY<br>LABORATORY</div>
           <div class="bs" style="font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase">Forensics &amp; Security</div>
@@ -1917,7 +2130,7 @@ async function paintAuth() {
 
 /* Pesan gagal masuk. Supabase memberi error yang sama untuk email yang
    belum terdaftar dan password yang salah, jadi statusnya ditanyakan ke
-   account_status() (db/11_account_status.sql). Kalau fungsi itu belum
+   account_status() (db/08_account_status.sql). Kalau fungsi itu belum
    dipasang, pesannya kembali ke "tidak cocok" yang umum. */
 async function loginError(e, email) {
   if (e.code === "email_not_confirmed" || /not confirmed/i.test(e.message || ""))

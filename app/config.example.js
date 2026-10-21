@@ -12,7 +12,7 @@ window.FORESTY_CONFIG = {
   // Alamat akun lab. Harus sama persis dengan yang ada di lab_email() pada 02_rls.sql.
   LAB_EMAIL: "forestylab@gmail.com",
 
-  // Kunci publik Web Push, hasil `node push/gen-vapid.mjs`.
+  // Kunci publik Web Push, hasil `node scripts/gen-vapid.mjs`.
   // Aman terlihat publik. Kunci privatnya disimpan sebagai secret Supabase.
   VAPID_PUBLIC_KEY: "PASTE_VAPID_PUBLIC_KEY",
 };

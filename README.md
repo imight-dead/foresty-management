@@ -3,24 +3,31 @@
 Sistem internal Foresty Laboratory (Forensics & Security Laboratory) periode 2026/2027 —
 program kerja, tugas divisi, agenda, direktori pengurus, notifikasi H-3/H-1/H-0, dan inbox lab.
 
-Ada dua versi di repo ini:
+```
+foresty-lab/
+├── index.html              mengarahkan ke app/
+├── app/                    website-nya (yang di-deploy ke Vercel)
+│   ├── index.html  manifest.webmanifest  sw.js  vercel.json  config.js
+│   ├── css/                styles.css, opening.css
+│   ├── js/                 app.js, opening.js
+│   └── assets/             logo, ikon aplikasi & notifikasi, audio opening
+├── db/                     SQL Supabase, dijalankan berurutan 01 → 10
+├── scripts/                script sekali pakai: token Gmail, kunci VAPID (Node 18+)
+└── supabase/functions/     Edge Function gmail-inbox dan push-send (Deno)
+```
 
-| Folder | Isi | Data |
-|---|---|---|
-| `foresty-console.html` | **Prototipe** satu file. Buka langsung di browser. | Contoh, tersimpan di browser masing-masing |
-| `app/` | **Versi asli.** Login, approval, data bersama. | Supabase (Postgres) |
-| `db/` | Skema, aturan keamanan, dan data awal | SQL, dijalankan di Supabase |
-| `supabase/functions/` | Edge Function penarik kotak masuk Gmail | Deno, di-deploy ke Supabase |
-| `gmail/` | Script sekali pakai untuk mengambil refresh token Google | Node 18+ |
-| `push/` | Script sekali pakai untuk membuat kunci VAPID Web Push | Node 18+ |
+`sw.js` dan `manifest.webmanifest` sengaja di akar `app/`: service worker hanya bisa
+mengurus halaman di foldernya sendiri dan di bawahnya.
+
+`assets/logo.png` (tanpa tulisan) dipakai di dalam aplikasi. `assets/logo-text.png` (dengan
+tulisan) hanya untuk ikon aplikasi di HP (`icon-*.png`) dan ikon notifikasi (`notif-icon.png`).
 
 ---
 
 ## Kenapa butuh Supabase
 
-Prototipe menyimpan semuanya di `localStorage`, jadi centang checklist di laptopmu tidak
-terlihat di HP temanmu. Versi asli butuh satu tempat penyimpanan bersama, autentikasi, dan
-yang terpenting: **aturan siapa boleh apa yang ditegakkan di server**. Menyembunyikan menu di
+Aplikasi ini butuh satu tempat penyimpanan bersama supaya centang checklist di laptopmu
+juga terlihat di HP temanmu, ditambah autentikasi, dan yang terpenting: **aturan siapa boleh apa yang ditegakkan di server**. Menyembunyikan menu di
 tampilan tidak menghentikan orang yang membuka developer tools; aturan di `db/02_rls.sql` yang
 menghentikannya.
 
@@ -42,12 +49,19 @@ Buka **SQL Editor → New query**, tempel isi tiap file, lalu **Run**, berurutan
 1. `db/01_schema.sql` — tabel
 2. `db/02_rls.sql` — aturan keamanan
 3. `db/03_seed.sql` — 26 pengurus, 6 divisi, dan tugas divisi
-4. `db/04_contoh_program.sql` — **opsional**, 9 program kerja contoh supaya aplikasi tidak
-   kosong saat pertama dibuka. Lewati kalau mau langsung isi proker asli.
-5. `db/10_task_deadline.sql` — tenggat tugas divisi. Tanpa ini, isian tenggat tidak muncul
+4. `db/04_notulen.sql` — ruang rapat dan notulen (menu Meeting)
+5. `db/05_push.sql` — notifikasi HP; lihat bagian **Notifikasi perangkat** di bawah
+6. `db/06_push_instant.sql` — notifikasi seketika saat rapat/program disimpan
+7. `db/07_task_deadline.sql` — tenggat tugas divisi. Tanpa ini, isian tenggat tidak muncul
    dan tugas divisi tidak masuk kalender.
-6. `db/11_account_status.sql` — pesan gagal masuk yang membedakan email belum terdaftar,
+8. `db/08_account_status.sql` — pesan gagal masuk yang membedakan email belum terdaftar,
    password salah, dan akun yang masih menunggu persetujuan.
+9. `db/09_audit_log.sql` — menu **Log** akun lab: semua tambah, ubah, dan hapus data
+   beserta siapa pelakunya. Pencatatan dimulai sejak file ini dijalankan.
+10. `db/10_task_description.sql` — deskripsi pada tugas divisi.
+
+Nomor file berubah sejak versi sebelumnya (dulu 06, 08, 09, 10, 11). Yang sudah pernah
+dijalankan tidak perlu dijalankan lagi.
 
 Kalau alamat akun lab bukan `forestylab@gmail.com`, ubah dulu di fungsi `lab_email()`
 pada `02_rls.sql` sebelum dijalankan.
@@ -154,7 +168,7 @@ layar persetujuannya hanya menampilkan peringatan aplikasi belum diverifikasi.
 ### 2. Ambil refresh token
 
 ```bash
-node gmail/get-refresh-token.mjs <CLIENT_ID> <CLIENT_SECRET>
+node scripts/get-gmail-token.mjs <CLIENT_ID> <CLIENT_SECRET>
 ```
 
 Browser terbuka, login sebagai `forestylab@gmail.com`, setujui izin baca. Refresh token
@@ -209,7 +223,7 @@ yang sama dengan yang dipakai menu Meeting.
 ### 1. Buat kunci VAPID
 
 ```bash
-node push/gen-vapid.mjs
+node scripts/gen-vapid.mjs
 ```
 
 Tempel kunci **publik** ke `app/config.js` pada `VAPID_PUBLIC_KEY`. Kunci **privat**
@@ -217,7 +231,7 @@ jangan masuk git dan jangan ditempel di chat.
 
 ### 2. Tabel dan penjadwalan
 
-Jalankan `db/08_push.sql` di SQL Editor. Sebelum Run, ganti `<REF>` dengan Reference ID
+Jalankan `db/05_push.sql` lalu `db/06_push_instant.sql` di SQL Editor. Sebelum Run, ganti `<REF>` dengan Reference ID
 proyek dan `<PUSH_CRON_SECRET>` dengan kata sandi karangan yang panjang.
 
 ### 3. Deploy pengirimnya

@@ -1,7 +1,7 @@
 /**
  * Ambil refresh token Google untuk akun lab — dijalankan SEKALI saja.
  *
- *   node gmail/get-refresh-token.mjs <CLIENT_ID> <CLIENT_SECRET>
+ *   node scripts/get-gmail-token.mjs <CLIENT_ID> <CLIENT_SECRET>
  *
  * Script ini membuka browser, kamu login sebagai forestylab@gmail.com dan
  * menyetujui izin baca Gmail, lalu refresh token-nya dicetak di terminal.
@@ -22,7 +22,7 @@ const REDIRECT = `http://localhost:${PORT}/callback`;
 const SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
-  console.error("Pemakaian: node gmail/get-refresh-token.mjs <CLIENT_ID> <CLIENT_SECRET>");
+  console.error("Pemakaian: node scripts/get-gmail-token.mjs <CLIENT_ID> <CLIENT_SECRET>");
   process.exit(1);
 }
 
@@ -58,7 +58,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "text/html" })
        .end(page("Dibatalkan", `Google membalas: ${err}. Tutup tab ini dan jalankan ulang script.`, false));
     console.error("\nGagal:", err);
-    server.close(); process.exit(1);
+    bye(1); return;
   }
 
   const code = url.searchParams.get("code");
@@ -76,7 +76,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "text/html" })
        .end(page("Tidak ada refresh token", "Cabut akses aplikasi di myaccount.google.com/permissions, lalu jalankan script ini lagi.", false));
     console.error("\nGoogle tidak mengirim refresh_token:", j);
-    server.close(); process.exit(1);
+    bye(1); return;
   }
 
   res.writeHead(200, { "Content-Type": "text/html" })
@@ -91,7 +91,7 @@ const server = http.createServer(async (req, res) => {
   console.log(`    GOOGLE_REFRESH_TOKEN=${j.refresh_token}\n`);
   console.log("Jangan tempel token ini di chat atau commit ke git.\n");
 
-  server.close(); process.exit(0);
+  bye(0);
 });
 
 server.listen(PORT, () => {

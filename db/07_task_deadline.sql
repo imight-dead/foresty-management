@@ -1,6 +1,6 @@
 -- =====================================================================
 -- FORESTY MANAGEMENT — TENGGAT TUGAS DIVISI
--- Jalankan setelah 01–09. Aman dijalankan ulang.
+-- Jalankan setelah 01–06. Aman dijalankan ulang.
 --
 -- Tugas divisi boleh punya tenggat. Tenggatnya tampil di bawah teks
 -- tugas dan masuk kalender — tiap orang hanya melihat tenggat tugas

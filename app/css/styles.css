@@ -268,6 +268,19 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 .trig{display:inline-block;padding:1px 7px;font-size:9px;font-family:var(--disp);font-weight:700;letter-spacing:.14em;
   background:#1a0505;color:#ff5b5c;box-shadow:inset 0 0 0 1px var(--edge);clip-path:var(--cut-tag);margin-right:7px}
 .trig.h0{background:var(--red);color:#fff;box-shadow:none}
+/* ---------- log perubahan (akun lab) ---------- */
+.logtools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.logtools #logq{flex:1;min-width:220px}
+.logtools #logtype{flex:0 0 auto;width:auto;min-width:170px}
+.logrow{text-align:left;width:100%}
+.logrow .who{color:#fff}
+.logrow .nd{display:block}
+.logrow .op{font-family:var(--disp);font-weight:700;font-size:15px;line-height:1;color:var(--red)}
+.logrow .op.insert{color:var(--ok)}
+.logrow .op.update{color:var(--warn)}
+.logrow.open{box-shadow:inset 0 0 0 1px var(--edge)}
+.logdetail{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:11.5px;word-break:break-word}
+.logdetail s{color:var(--dim)}
 .mailrow{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:12px;padding:12px 14px;
   background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);align-items:center;transition:.14s}
 .mailrow>*{min-width:0}
@@ -318,8 +331,18 @@ nav{padding:10px 0;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:
 .tdue-btn{flex:0 0 36px;display:grid;place-items:center;background:#0e0e0e;box-shadow:inset 0 0 0 1px #1d1d1d;color:var(--dim);transition:.14s}
 .tdue-btn:hover,.tdue-btn.on{color:var(--red);box-shadow:inset 0 0 0 1px var(--edge)}
 .tdue-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7}
-.duerow{margin-top:0}
-.addrow .ainput.due{flex:0 0 auto;min-width:0;width:auto}
+.task .tdesc{display:inline-block;width:100%;font-size:11px;color:var(--muted);margin-top:3px;white-space:pre-line}
+/* form tambah & edit tugas: nama, deskripsi, lalu tanggal + jam sebaris */
+.taskform{display:flex;flex-direction:column;gap:7px;margin-top:7px}
+.taskform.add{margin-top:10px}
+.taskform textarea.ainput{min-height:0}
+.tdrow{display:flex;gap:7px;flex-wrap:wrap}
+.tdrow .ainput{flex:1 1 130px;width:auto;min-width:0}
+.tdrow .btn{flex:0 0 auto}
+.tfbtns{display:flex;gap:7px;flex-wrap:wrap}
+.tfbtns .danger{margin-left:auto}
+.btn.danger{background:#151515;color:#ff6b6c;box-shadow:inset 0 0 0 1px rgba(228,24,26,.45)}
+.btn.danger:hover{background:var(--red);color:#fff;box-shadow:none}
 
 
 /* ---------- autentikasi ---------- */

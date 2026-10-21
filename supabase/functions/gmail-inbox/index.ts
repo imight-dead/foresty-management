@@ -56,7 +56,7 @@ async function accessToken(): Promise<string> {
   if (j.error === "invalid_grant") {
     throw new Error(
       "The Gmail refresh token is no longer valid. Make sure the OAuth app is In production, " +
-      "create a new token with gmail/get-refresh-token.mjs, then set GOOGLE_REFRESH_TOKEN again. " +
+      "create a new token with scripts/get-gmail-token.mjs, then set GOOGLE_REFRESH_TOKEN again. " +
       "Steps are in the README under Integrasi Gmail.",
     );
   }

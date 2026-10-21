@@ -1,8 +1,6 @@
 /* Service worker — menerima push dari server dan menampilkannya sebagai
    notifikasi perangkat, bahkan saat aplikasi tidak sedang dibuka. */
 
-const VERSION = "foresty-sw-1";
-
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
@@ -13,8 +11,11 @@ self.addEventListener("push", (event) => {
   const title = d.title || "Foresty Management";
   const options = {
     body: d.body || "",
-    icon: "icon-192.png",
-    badge: "icon-192.png",
+    /* icon: logo berwarna tanpa latar, di samping teks notifikasi.
+       badge: ikon kecil di bilah status. Android hanya membaca bagian
+       transparannya, jadi harus siluet; gambar berlatar jadi kotak putih. */
+    icon: "assets/notif-icon.png",
+    badge: "assets/badge-96.png",
     tag: d.tag || "foresty",          /* pengingat yang sama tidak menumpuk */
     renotify: false,
     data: { url: d.url || "./" },

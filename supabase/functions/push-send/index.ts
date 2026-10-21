@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
       api("programs?select=id,title,status,starts_at,place"),
       api("checklist?select=id,program_id,text,member_id,due_at,done"),
       api("meetings?select=id,room,title,held_at,place").catch(() => []),
-      /* kolom due_at baru ada setelah db/10_task_deadline.sql */
+      /* kolom due_at baru ada setelah db/07_task_deadline.sql */
       api("tasks?select=id,division_id,member_id,text,status,due_at&due_at=not.is.null").catch(() => []),
       api("divisions?select=id,name"),
       api("division_members?select=division_id,member_id"),

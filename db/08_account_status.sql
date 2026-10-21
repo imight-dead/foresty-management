@@ -1,6 +1,6 @@
 -- =====================================================================
 -- FORESTY MANAGEMENT — STATUS AKUN UNTUK PESAN GAGAL MASUK
--- Jalankan setelah 01–10. Aman dijalankan ulang.
+-- Jalankan setelah 01–07. Aman dijalankan ulang.
 --
 -- Supabase sengaja memberi error yang sama untuk "email belum terdaftar"
 -- dan "password salah". Fungsi ini dipanggil HANYA setelah masuk gagal,

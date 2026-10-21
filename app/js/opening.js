@@ -15,7 +15,7 @@
   const TITLE = "FORESTY";
   const SUBTITLE = "Forensics & Security Laboratory";
   const PROMPT = "Click anywhere to enter";
-  const LOGO = "assets/logo.png";
+  const LOGO = "assets/logo-text.png";
   const AUDIO = "assets/opening.mp3";
 
   /* Titik di opening.mp3 tepat sebelum beat drop, dan lama luruhan

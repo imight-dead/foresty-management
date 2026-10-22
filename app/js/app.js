@@ -672,7 +672,7 @@ function viewDashboard() {
       ${countdown(e.when)}
     </button>`).join("") || `<div class="empty">No upcoming agenda.</div>`;
 
-  const sapaan = ME.isLab ? "Lab Account" : ME.member.name.split(" ")[0];
+  const sapaan = ME.isLab ? "Lab Account" : nick(ME.member);
 
   return heroBlock("Operations Console",
     `Hello, ${esc(sapaan)}. Control centre for work programs, division assignments, and the Foresty Laboratory agenda.`) + `
@@ -1078,10 +1078,16 @@ function modalDivision(did) {
 }
 
 /* ---------------------------------------------------------------- FORESTY 26/27 */
-/* Nama panggilan untuk label seperti "Program Radhi's Lead". Yang belum
-   terdaftar di sini memakai kata pertama namanya. */
-const NICK = { m05: "Radhi" };
-const nick = m => NICK[m.id] || m.name.split(" ")[0];
+/* Nama panggilan (sapaan Dashboard, "Program …'s Lead"): kata pertama nama,
+   kecuali kata pertamanya Muhammad / Muhamad / Mohammad / M. — maka kata
+   kedua (Muhammad Meizar -> Meizar). NICK untuk yang ditetapkan khusus. */
+const NICK = { m05: "Radhiyya" };
+const MUHAMMAD = /^(muhamm?ad|mohamm?ad|m\.?)$/i;
+const nick = m => {
+  if (NICK[m.id]) return NICK[m.id];
+  const w = m.name.split(" ").filter(Boolean);
+  return MUHAMMAD.test(w[0]) && w[1] ? w[1] : w[0];
+};
 
 const ADVISOR = {
   name: "Assoc. Prof. Dr. Vera Suryani, S.T., M.T.",

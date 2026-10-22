@@ -27,7 +27,8 @@ begin
     body    := jsonb_build_object(
                  'event', TG_ARGV[0],
                  'id',    new.id::text,
-                 'op',    TG_OP)
+                 'op',    TG_OP),
+    timeout_milliseconds := 30000
   );
   return new;
 exception when others then

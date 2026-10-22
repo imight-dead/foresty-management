@@ -11,7 +11,7 @@ foresty-lab/
 │   ├── css/                styles.css, opening.css
 │   ├── js/                 app.js, opening.js
 │   └── assets/             logo, ikon aplikasi & notifikasi, audio opening
-├── db/                     SQL Supabase, dijalankan berurutan 01 → 14
+├── db/                     SQL Supabase, dijalankan berurutan 01 → 15
 ├── scripts/                script sekali pakai: token Gmail, kunci VAPID (Node 18+)
 └── supabase/functions/     Edge Function gmail-inbox dan push-send (Deno)
 ```
@@ -67,6 +67,8 @@ Buka **SQL Editor → New query**, tempel isi tiap file, lalu **Run**, berurutan
     sudah ada sebelum file ini dijalankan.
 14. `db/14_task_push.sql` — notifikasi HP seketika ke orang yang ditugaskan saat tugas
     bertenggat dibuat atau tenggatnya diubah.
+15. `db/15_push_timeout.sql` — hanya untuk instalasi lama: menaikkan batas tunggu panggilan
+    push-send jadi 30 detik (file 05 dan 06 versi baru sudah memakainya).
 
 Nomor file berubah sejak versi sebelumnya (dulu 06, 08, 09, 10, 11). Yang sudah pernah
 dijalankan tidak perlu dijalankan lagi.

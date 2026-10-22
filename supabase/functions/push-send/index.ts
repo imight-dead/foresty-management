@@ -33,10 +33,19 @@ const hdr = {
 };
 
 const api = async (path: string, init: RequestInit = {}) => {
-  const r = await fetch(`${SUPA}/rest/v1/${path}`, { ...init, headers: { ...hdr, ...(init.headers || {}) } });
-  const text = await r.text();
-  if (!r.ok) throw new Error(`${path}: ${r.status} ${text}`);
-  return text ? JSON.parse(text) : null;
+  /* Jam function kadang sedikit mendahului jam database, sehingga kuncinya
+     ditolak sebagai "JWT issued at future" (PGRST303). Tunggu sebentar lalu
+     coba lagi, supaya pengingat pukul 07.00 tidak hilang karena itu. */
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(`${SUPA}/rest/v1/${path}`, { ...init, headers: { ...hdr, ...(init.headers || {}) } });
+    const text = await r.text();
+    if (r.status === 401 && text.includes("PGRST303") && attempt < 3) {
+      await new Promise((ok) => setTimeout(ok, 2000));
+      continue;
+    }
+    if (!r.ok) throw new Error(`${path}: ${r.status} ${text}`);
+    return text ? JSON.parse(text) : null;
+  }
 };
 
 /* Pukul 07.00 WIB, `minus` hari sebelum tanggal acara. */

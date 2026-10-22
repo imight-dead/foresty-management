@@ -72,7 +72,8 @@ select cron.schedule(
     headers := jsonb_build_object(
                  'Content-Type',  'application/json',
                  'x-cron-secret', '<PUSH_CRON_SECRET>'),
-    body    := '{}'::jsonb
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 30000
   );
   $$
 );

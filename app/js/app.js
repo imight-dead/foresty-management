@@ -30,8 +30,8 @@ const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
 sb.auth.onAuthStateChange(ev => { if (ev === "PASSWORD_RECOVERY") recovering = true; });
 
 /* ---------------------------------------------------------------- utilitas */
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const ini = n => String(n).split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ini = n => esc(String(n).split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase());
 const MO = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DW = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const fDate  = d => `${d.getDate()} ${MO[d.getMonth()]} ${d.getFullYear()}`;
@@ -161,6 +161,18 @@ async function cycleTask(did, mid, tid) {
   rerender();
   const { error } = await sb.from("tasks").update({ status: t.status }).eq("id", tid);
   if (error) { t.status = prev; rerender(); fail(error, "Could not save the task status"); }
+}
+
+async function deleteCheck(pid, cid) {
+  if (!canAll()) return toast("Only core officers can delete checklist items.", true);
+  const p = prog(pid), c = p.checklist.find(x => x.id === cid);
+  if (!confirm(`Delete the checklist item "${c.text}"? This cannot be undone.`)) return;
+  const { error } = await sb.from("checklist").delete().eq("id", cid);
+  if (error) return fail(error, "Could not delete the item");
+  p.checklist.splice(p.checklist.indexOf(c), 1);
+  writeLog(pid, `${ME.member?.name || "Lab account"} deleted the item "${c.text}"`);
+  rerender();
+  toast("Checklist item deleted.");
 }
 
 async function addCheck(pid, text, who) {
@@ -311,6 +323,16 @@ async function enablePush() {
   PUSH.busy = false; render();
 }
 
+/* Kirim satu notifikasi uji ke semua perangkat milik akun ini. */
+async function testPush() {
+  PUSH.busy = true; render();
+  const { data, error } = await sb.functions.invoke("push-send", { body: { event: "test" } });
+  PUSH.busy = false; render();
+  if (error || data?.error) return toast("Test failed: " + (data?.error || error.message) + ". Ask the lab account to deploy push-send.", true);
+  if (!data.devices) return toast("No device is registered for your account. Turn notifications off and on again.", true);
+  toast(`Test sent to ${data.sent} of ${data.devices} device(s). It should appear within a few seconds.`, !data.sent);
+}
+
 async function disablePush() {
   PUSH.busy = true; render();
   try {
@@ -344,12 +366,15 @@ function pushPanel() {
       <div style="flex:1;min-width:200px">
         <div class="label">Device Notifications ${PUSH.on ? '<span class="tag t-completed" style="margin-left:6px">On</span>' : '<span class="tag t-soon" style="margin-left:6px">Off</span>'}</div>
         <div class="meta" style="margin-top:4px">${PUSH.on
-          ? "This device receives H-3, H-1, and same-day reminders for programs and meetings, plus your division's task deadlines, even when the app is closed."
+          ? "This device receives H-3, H-1, and same-day reminders for programs and meetings, plus your own task deadlines, even when the app is closed."
           : "Turn this on to get program and meeting reminders on this phone or laptop."}</div>
       </div>
-      <button class="btn${PUSH.on ? " ghost" : ""}" data-push="${PUSH.on ? "off" : "on"}"${PUSH.busy ? " disabled" : ""}>
-        ${PUSH.busy ? "Working…" : PUSH.on ? "Turn Off" : "Turn On Notifications"}
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${PUSH.on ? `<button class="btn" data-pushtest${PUSH.busy ? " disabled" : ""}>Send Test Notification</button>` : ""}
+        <button class="btn${PUSH.on ? " ghost" : ""}" data-push="${PUSH.on ? "off" : "on"}"${PUSH.busy ? " disabled" : ""}>
+          ${PUSH.busy ? "Working…" : PUSH.on ? "Turn Off" : "Turn On Notifications"}
+        </button>
+      </div>
     </div>`;
 }
 
@@ -385,7 +410,10 @@ function myRooms() {
   if (sendiri) out.push(sendiri);
   return out;
 }
-const canWriteMinute = mt => canAll() || mt.created_by === ME?.user?.id;
+/* Notulen: semua anggota divisi rapat itu. Jadwal (buat, ubah, hapus):
+   koordinator dan akun lab saja. Sama dengan db/12_meeting_roles.sql. */
+const canWriteNotes = mt => myRooms().includes(mt.room);
+const canSchedule = () => canAll();
 
 /* ---------------------------------------------------------------- turunan */
 const progress = p => {
@@ -573,7 +601,7 @@ const MENU = [
   { id:"dashboard",    label:"Dashboard",    icon:'<path d="M3 12h6v9H3zM15 3h6v18h-6zM9 8h6v13H9z"/>' },
   { id:"programs",     label:"Programs",     icon:'<path d="M4 4h16v16H4z"/><path d="M8 10h8M8 14h5"/>' },
   { id:"division",     label:"Division",     icon:'<circle cx="12" cy="7" r="3"/><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M12 10v4M7 15l4-2M17 15l-4-2"/>' },
-  { id:"minutes",      label:"Meeting",      icon:'<path d="M5 3h11l3 3v15H5z"/><path d="M9 9h7M9 13h7M9 17h4"/>' },
+  { id:"meeting",      label:"Meeting",      icon:'<path d="M5 3h11l3 3v15H5z"/><path d="M9 9h7M9 13h7M9 17h4"/>' },
   { id:"foresty",      label:"Foresty 26/27",icon:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 7h5M16 11h5M16 15h3"/>' },
   { id:"notification", label:"Notification", icon:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>' },
 ];
@@ -594,8 +622,13 @@ function go(r) {
   $("#sidebar").classList.remove("open");
   const sc = $("#sideScrim"); if (sc) sc.hidden = true;
 }
+/* Rute lama yang sudah diganti namanya; tautan lama (mis. dari notifikasi
+   yang sudah terkirim) tetap mendarat di menu yang benar. */
+const ROUTE_ALIAS = { minutes: "meeting" };
+const hashRoute = () => { const r = location.hash.replace("#", ""); return ROUTE_ALIAS[r] || r; };
+
 window.addEventListener("hashchange", () => {
-  const r = location.hash.replace("#", "");
+  const r = hashRoute();
   if (r && r !== route && visibleMenu().some(m => m.id === r)) { route = r; render(); }
 });
 
@@ -741,12 +774,15 @@ function modalProgram(pid) {
   const items = p.checklist.map(c => {
     const late = c.due && !c.done && c.due < new Date();
     const pic = byId(c.who);
-    return `<button class="chk${c.done ? " on" : ""}${canCheck(c) ? "" : " locked"}" data-check="${p.id}|${c.id}">
+    const row = `<button class="chk${c.done ? " on" : ""}${canCheck(c) ? "" : " locked"}" data-check="${p.id}|${c.id}">
       <span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 5"/></svg></span>
       <span><span class="t">${esc(c.text)}</span>
       <span class="who">PIC ${esc(pic?.name || "-")}${c.due ? ` · due ${fShort(c.due)} ${fTime(c.due)}` : ""}
       ${late ? '<span class="tag t-over" style="margin-left:6px">Overdue</span>' : ""}</span></span>
     </button>`;
+    /* menghapus item: inti saja, sama dengan checklist_delete di 02_rls.sql */
+    return canAll() ? `<div class="trow">${row}<button class="tdue-btn del" data-checkdel="${p.id}|${c.id}" title="Delete item" aria-label="Delete checklist item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button></div>` : row;
   }).join("");
 
   return `<div class="modal-head"><div class="dots"></div>
@@ -1042,6 +1078,11 @@ function modalDivision(did) {
 }
 
 /* ---------------------------------------------------------------- FORESTY 26/27 */
+/* Nama panggilan untuk label seperti "Program Radhi's Lead". Yang belum
+   terdaftar di sini memakai kata pertama namanya. */
+const NICK = { m05: "Radhi" };
+const nick = m => NICK[m.id] || m.name.split(" ")[0];
+
 const ADVISOR = {
   name: "Assoc. Prof. Dr. Vera Suryani, S.T., M.T.",
   role: "Advisor of Forensic & Security Laboratory",
@@ -1127,7 +1168,7 @@ function modalMember(mid) {
         </div>
       </div>
       <div>
-        <div class="label" style="margin-bottom:9px">Programs They Lead (PIC)</div>
+        <div class="label" style="margin-bottom:9px">Program ${esc(nick(m))}'s Lead</div>
         ${mine.length ? `<div class="stack">${mine.map(p => {
           const pr = progress(p);
           return `<button class="chk" data-open-prog="${p.id}" style="align-items:center">
@@ -1193,7 +1234,7 @@ let roomTab = null;
 
 function viewMinutes() {
   const rooms = myRooms();
-  if (!rooms.length) return `<div class="empty">No meeting rooms available for your account.</div>`;
+  if (!rooms.length) return `<div class="empty">No meeting divisions available for your account.</div>`;
   if (!rooms.includes(roomTab)) roomTab = rooms[0];
 
   const now = new Date();
@@ -1209,7 +1250,7 @@ function viewMinutes() {
     return `<button class="card click" data-minute="${m.id}">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
         ${akan ? `<span class="tag t-ongoing"><i class="dot pulse"></i>Upcoming</span>`
-               : `<span class="tag ${ada ? "t-completed" : "t-soon"}">${ada ? "Minutes Recorded" : "No Minutes Yet"}</span>`}
+               : `<span class="tag ${ada ? "t-completed" : "t-soon"}">${ada ? "Notulen Recorded" : "No Notulen Yet"}</span>`}
         <span class="meta num">${fShort(m.held)}</span>
       </div>
       <h3 style="margin:11px 0 6px">${esc(m.title)}</h3>
@@ -1217,13 +1258,13 @@ function viewMinutes() {
       ${countdown(m.held)}
     </button>`;
   }).join("") || `<div class="empty">${meetingsReady
-      ? "No meetings in this room yet."
+      ? "No meetings in this division yet."
       : "The meetings table has not been created. Run db/04_notulen.sql in Supabase."}</div>`;
 
   return `<div class="sec-head" style="justify-content:space-between">
-      <div><div class="kick">Schedule &amp; Minutes</div><h1>Meeting</h1>
-      <p class="sec-sub">Meeting schedules per room, each with its own countdown.</p></div>
-      ${meetingsReady ? `<button class="btn" data-newminute>+ Schedule Meeting</button>` : ""}
+      <div><div class="kick">Schedule &amp; Notulen</div><h1>Meeting</h1>
+      <p class="sec-sub">Meeting schedules per division, each with its own countdown.</p></div>
+      ${meetingsReady && canSchedule() ? `<button class="btn" data-newminute>+ Schedule Meeting</button>` : ""}
     </div>
     <div class="rule"></div>
     <div class="tabs">
@@ -1239,20 +1280,20 @@ function modalMinute(id) {
   const m = MEETINGS.find(x => x.id === id);
   if (!m) return `<div class="modal-body"><div class="empty">Meeting not found.</div></div>`;
   const akan = m.held >= new Date();
-  const bisa = canWriteMinute(m);
+  const bisa = canWriteNotes(m);
 
   const isi = bisa
     ? `<form data-noteform="${m.id}">
          <textarea class="ainput notulen-edit" name="notes" rows="14"
            placeholder="1. Discussion...&#10;2. Decisions...&#10;3. Follow-up...">${esc(m.notes)}</textarea>
          <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:11px;align-items:center">
-           <button class="btn" type="submit">Save Minutes</button>
+           <button class="btn" type="submit">Save Notulen</button>
            <span class="meta">${m.notes.trim()
              ? `Last updated ${fShort(new Date(m.updated_at))} ${fTime(new Date(m.updated_at))}`
              : akan ? "Can be filled in once the meeting has taken place." : "Never filled in."}</span>
          </div>
        </form>`
-    : `<div class="notulen">${esc(m.notes) || '<span class="meta">No minutes yet.</span>'}</div>`;
+    : `<div class="notulen">${esc(m.notes) || '<span class="meta">No notulen yet.</span>'}</div>`;
 
   return `<div class="modal-head"><div class="dots"></div>
       <div style="position:relative">
@@ -1260,14 +1301,14 @@ function modalMinute(id) {
         <h2 style="margin:8px 0 6px">${esc(m.title)}</h2>
         <div class="meta">${DW[m.held.getDay()]}, ${fDate(m.held)} · ${fTime(m.held)} WIB${m.place ? " · " + esc(m.place) : ""}</div>
         <div style="margin-top:14px">${countdown(m.held)}</div>
-        ${bisa ? `<div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap">
+        ${canSchedule() ? `<div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap">
           <button class="btn ghost sm" data-editminute="${m.id}">Edit Schedule</button>
           <button class="btn ghost sm" data-minutedel="${m.id}">Delete</button>
         </div>` : ""}
       </div></div>
     <div class="modal-body">
       <div>
-        <div class="label" style="margin-bottom:9px">Minutes</div>
+        <div class="label" style="margin-bottom:9px">Notulen</div>
         ${isi}
       </div>
     </div>`;
@@ -1276,13 +1317,15 @@ function modalMinute(id) {
 async function saveNotes(id, f) {
   const btn = f.querySelector("button[type=submit]");
   btn.disabled = true;
-  const { error } = await sb.from("meetings").update({ notes: f.notes.value }).eq("id", id);
+  const { data, error } = await sb.from("meetings").update({ notes: f.notes.value }).eq("id", id).select("id");
   btn.disabled = false;
-  if (error) return fail(error, "Could not save the minutes");
+  if (error) return fail(error, "Could not save the notulen");
+  /* RLS yang menolak UPDATE tidak memberi error, hanya 0 baris berubah */
+  if (!data.length) return toast("The notulen was not saved: no permission yet. Ask the lab account to run db/12_meeting_roles.sql.", true);
   await loadAll();
   showModal("minute", id);
   render();
-  toast("Minutes saved.");
+  toast("Notulen saved.");
 }
 
 function modalMinuteForm(id) {
@@ -1294,12 +1337,12 @@ function modalMinuteForm(id) {
       <div style="position:relative">
         <div class="kick">${m ? "Edit Meeting" : "New Meeting"}</div>
         <h2 style="margin:8px 0 4px">${m ? esc(m.title) : "Schedule a Meeting"}</h2>
-        <div class="meta">Minutes are written later from this meeting card. Only members of the chosen room can read it.</div>
+        <div class="meta">Notulen is written later from this meeting card. Only members of the chosen division can read it.</div>
       </div></div>
     <div class="modal-body">
       <form class="aform" data-minuteform="${m ? m.id : ""}">
         <div class="cols" style="gap:13px">
-          <label class="afield"><span class="label">Meeting room</span>
+          <label class="afield"><span class="label">Meeting division</span>
             <select class="ainput" name="room">
               ${rooms.map(r => `<option value="${r}"${(m ? m.room : roomTab) === r ? " selected" : ""}>${esc(room(r).label)}</option>`).join("")}
             </select></label>
@@ -1351,7 +1394,7 @@ async function saveMinute(id, f) {
 
 async function deleteMinute(id) {
   const m = MEETINGS.find(x => x.id === id);
-  if (!confirm(`Delete the meeting "${m.title}" and its minutes? This cannot be undone.`)) return;
+  if (!confirm(`Delete the meeting "${m.title}" and its notulen? This cannot be undone.`)) return;
   const { error } = await sb.from("meetings").delete().eq("id", id);
   if (error) return fail(error, "Could not delete the meeting");
   closeModal();
@@ -1669,7 +1712,6 @@ function viewApproval() {
         <div class="kv"><span class="k">Sent</span><span class="num">${fShort(at)} ${fTime(at)}</span></div>
       </div>
       <div style="flex:0 0 240px;display:flex;flex-direction:column;gap:8px">
-        <input class="ainput" id="rsn-${a.user_id}" placeholder="Reason for rejection (optional)">
         <div style="display:flex;gap:8px">
           <button class="btn sm" data-appr="ok|${a.user_id}" style="flex:1;justify-content:center">Approve</button>
           <button class="btn ghost sm" data-appr="no|${a.user_id}" style="flex:1;justify-content:center">Reject</button>
@@ -1718,23 +1760,20 @@ function rejectedSection() {
           <span class="snip">${esc(a.email)}${a.reason ? " — " + esc(a.reason) : ""}</span>
         </span>
         <button class="btn sm" data-appr="ok|${a.user_id}">Approve</button>
-        <button class="btn ghost sm" data-appr="reset|${a.user_id}">Reopen</button>
+        <button class="btn ghost sm" data-appr="no|${a.user_id}">Delete</button>
       </div>`;
     }).join("")}</div>
-    <div class="meta" style="margin-top:10px">“Reopen” clears the rejection so the person can pick a name again on their next sign-in.</div>`;
+    <div class="meta" style="margin-top:10px">These were rejected before rejecting started to delete accounts. “Delete” removes the account so the email can register again.</div>`;
 }
 
 async function decide(act, uid) {
   const row = PENDING.concat(ACTIVE, REJECTED).find(p => p.user_id === uid);
   if (!row) return;
-  if (act === "cabut" || act === "reset") {
-    const pesan = act === "cabut"
-      ? `Revoke access for ${row.email}? Their name becomes claimable again.`
-      : `Reopen the registration for ${row.email}? They will be asked to pick a name again on sign-in.`;
-    if (!confirm(pesan)) return;
+  if (act === "cabut") {
+    if (!confirm(`Revoke access for ${row.email}? Their name becomes claimable again.`)) return;
     const { error } = await sb.from("profiles").delete().eq("user_id", uid);
     if (error) return fail(error, "Could not remove the account record");
-    toast(act === "cabut" ? `Access revoked for ${row.email}.` : `Registration reopened for ${row.email}.`);
+    toast(`Access revoked for ${row.email}.`);
     await loadProfiles(); render(); return;
   }
   if (act === "ok") {
@@ -1749,13 +1788,16 @@ async function decide(act, uid) {
     }
     toast(`${byId(row.member_id)?.name || row.email} approved.`);
   } else {
-    const r = document.getElementById("rsn-" + uid);
-    const { error } = await sb.from("profiles").update({
-      status: "rejected", reason: r?.value.trim() || null,
-      decided_at: new Date().toISOString(), decided_by: ME.user.id,
-    }).eq("user_id", uid);
-    if (error) return fail(error, "Could not reject");
-    toast(`Registration for ${row.email} rejected.`);
+    /* Tolak = hapus akunnya (db/11_reject_account.sql). Email itu dianggap
+       belum terdaftar lagi, jadi Sign In menyuruhnya mendaftar ulang. */
+    if (!confirm(`Reject ${row.email}? The account is deleted, so this email will have to register again.`)) return;
+    const { error } = await sb.rpc("reject_account", { p_user: uid });
+    if (error) {
+      return toast(/reject_account|PGRST202|42883|schema cache/i.test(`${error.code} ${error.message}`)
+        ? "Rejecting needs db/11_reject_account.sql. Run it in Supabase → SQL Editor first."
+        : (error.message || "Could not reject"), true);
+    }
+    toast(`Registration for ${row.email} rejected and deleted.`);
   }
   await loadProfiles();
   render();
@@ -1778,7 +1820,7 @@ function paintUser() {
     <button class="logout" id="logout" title="Sign out" aria-label="Sign out">
       <svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>
     </button>`;
-  $("#logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+  $("#logout").addEventListener("click", signOut);
 }
 
 function render() {
@@ -1795,7 +1837,7 @@ function render() {
   $("#bellCount").hidden = !u;
   const views = { dashboard: viewDashboard, programs: viewPrograms, division: viewDivision,
                   foresty: viewForesty, notification: viewNotification, inbox: viewInbox,
-                  minutes: viewMinutes,
+                  meeting: viewMinutes,
                   approval: viewApproval, log: viewLog };
   /* isian yang sedang diketik (misalnya pencarian Log) tetap fokus walau
      halamannya digambar ulang oleh pembaruan realtime */
@@ -1809,13 +1851,14 @@ function render() {
 
 /* ---------------------------------------------------------------- interaksi */
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-task],[data-taskedit],[data-taskdel],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-mailmore],[data-logrow],[data-logmore],[data-logrefresh],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push]");
+  const t = e.target.closest("[data-go],[data-tab],[data-open-prog],[data-open-div],[data-open-member],[data-check],[data-checkdel],[data-task],[data-taskedit],[data-taskdel],[data-cal],[data-day],[data-notif],[data-readall],[data-appr],[data-auth],[data-copy],[data-mailrefresh],[data-mailmore],[data-logrow],[data-logmore],[data-logrefresh],[data-newprog],[data-editprog],[data-progdel],[data-room],[data-minute],[data-newminute],[data-editminute],[data-minutedel],[data-push],[data-pushtest]");
   if (!t) return;
   const d = t.dataset;
 
   if (d.auth) { const [act, arg] = d.auth.split("|"); return authAction(act, arg); }
   if (d.appr) { const [act, uid] = d.appr.split("|"); return decide(act, uid); }
   if (d.push) return d.push === "on" ? enablePush() : disablePush();
+  if (d.pushtest !== undefined) return testPush();
   if (d.room) { roomTab = d.room; return render(); }
   if (d.minute) return showModal("minute", d.minute);
   if (d.newminute !== undefined) return showModal("mform", "");
@@ -1843,6 +1886,7 @@ document.addEventListener("click", e => {
   if (d.openProg) return showModal("prog", d.openProg);
   if (d.openDiv) return showModal("div", d.openDiv);
   if (d.openMember) return showModal("member", d.openMember);
+  if (d.checkdel) { const [pid, cid] = d.checkdel.split("|"); return deleteCheck(pid, cid); }
   if (d.check) { const [pid, cid] = d.check.split("|"); return toggleCheck(pid, cid); }
   if (d.task) { const [did, mid, tid] = d.task.split("|"); return cycleTask(did, mid, tid); }
   if (d.taskedit) { taskEdit = taskEdit === d.taskedit ? null : d.taskedit; return rerender(); }
@@ -2063,6 +2107,18 @@ async function viewPending() {
     <button class="btn ghost" data-auth="logout" style="width:100%;justify-content:center;margin-top:8px">Sign out</button>`);
 }
 
+/* Akun dihapus lewat Reject (db/11_reject_account.sql) saat orangnya masih
+   punya sesi di browser. Sesinya sudah dibuang; email itu bisa daftar lagi. */
+function viewRemoved() {
+  return authShell(`
+    <div class="await-ic rej"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
+    <h2 style="margin-bottom:4px">Registration Rejected</h2>
+    <p class="meta" style="margin-bottom:16px">The lab account rejected the registration for <b style="color:#fff">${esc(authCtx?.email || "")}</b>, and the account was removed. It is no longer registered.</p>
+    <div class="ahint">Contact the lab account (${esc(LAB_EMAIL)}) if this is a mistake. You can register again with the same email.</div>
+    <button class="btn" data-auth="register" style="width:100%;justify-content:center;margin-top:10px">Register Again</button>
+    <button class="btn ghost" data-auth="login" style="width:100%;justify-content:center;margin-top:8px">Back to Sign In</button>`);
+}
+
 async function viewRejected() {
   const p = authCtx, m = byId(p.member_id) || (await claimableMembers()).find(x => x.id === p.member_id);
   return authShell(`
@@ -2106,8 +2162,14 @@ async function viewReset() {
     <div class="aalt">Not you? <button data-auth="logout">Cancel and sign out</button></div>`);
 }
 
+async function signOut() {
+  if (!confirm("Sign out of Foresty Management?")) return;
+  await sb.auth.signOut();
+  location.reload();
+}
+
 async function authAction(act, arg) {
-  if (act === "logout") { await sb.auth.signOut(); location.reload(); return; }
+  if (act === "logout") return signOut();
   if (act === "refresh") { return gate(); }
   authErr = ""; authInfo = "";
   authScreen = act;
@@ -2122,6 +2184,7 @@ async function paintAuth() {
     : authScreen === "rejected" ? await viewRejected()
     : authScreen === "forgot"   ? await viewForgot()
     : authScreen === "reset"    ? await viewReset()
+    : authScreen === "removed"  ? viewRemoved()
     : await viewLogin();
   root.innerHTML = v;
   authErr = ""; authInfo = "";
@@ -2298,7 +2361,23 @@ async function gate() {
     const { data, error } = await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
     if (error) { console.error(error); }
     profile = data;
-    if (!profile) { showApp(false); authCtx = { email: user.email }; authScreen = "claim"; return paintAuth(); }
+    if (!profile) {
+      showApp(false);
+      /* Sesi di browser bisa masih hidup setelah akunnya dihapus lewat Reject.
+         Tanya server dulu: kalau akunnya sudah tidak ada, buang sesinya dan
+         beri tahu bahwa pendaftarannya ditolak — jangan tawarkan pilih nama. */
+      const [{ error: gone }, st] = await Promise.all([
+        sb.auth.getUser(),
+        sb.rpc("account_status", { p_email: user.email }),   /* 'none' = akunnya sudah dihapus */
+      ]);
+      if ((gone && (gone.status === 401 || gone.status === 403 || /not exist|not found/i.test(gone.message || "")))
+          || st.data === "none") {
+        await sb.auth.signOut({ scope: "local" });
+        authCtx = { email: user.email }; authScreen = "removed";
+        return paintAuth();
+      }
+      authCtx = { email: user.email }; authScreen = "claim"; return paintAuth();
+    }
     if (profile.status !== "approved") {
       showApp(false); authCtx = profile;
       authScreen = profile.status === "rejected" ? "rejected" : "pending";
@@ -2320,7 +2399,8 @@ async function gate() {
   if (lab) await loadProfiles();
 
   showApp(true);
-  route = location.hash.replace("#", "") || (lab ? "approval" : "dashboard");
+  route = hashRoute() || (lab ? "approval" : "dashboard");
+  if (ROUTE_ALIAS[location.hash.slice(1)]) history.replaceState(null, "", "#" + route);
   if (!visibleMenu().some(m => m.id === route)) route = "dashboard";
   render();
   wireChrome();

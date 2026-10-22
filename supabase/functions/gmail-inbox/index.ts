@@ -133,7 +133,9 @@ Deno.serve(async (req) => {
     const user = await userRes.json();
 
     const labEmail = (Deno.env.get("LAB_EMAIL") ?? "forestylab@gmail.com").toLowerCase();
-    const isLab = (user.email ?? "").toLowerCase() === labEmail;
+    /* email lab SAJA tidak cukup: penanda foresty_lab di app_metadata hanya
+       bisa dipasang dari server (db/13_security.sql), bukan oleh pengguna. */
+    const isLab = (user.email ?? "").toLowerCase() === labEmail && user.app_metadata?.foresty_lab === true;
 
     /* Kotak masuk lab hanya untuk akun lab. Pengurus lain tidak melihat menu
        Inbox sama sekali, dan kalau memanggil endpoint ini langsung, ditolak

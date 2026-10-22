@@ -68,38 +68,53 @@ const ROOM_OF_DIV: Record<string, string> = {
    di daftar ini (anggota divisi). Akun lab selalu ikut menerima. */
 type Job = { key: string; title: string; body: string; url: string; room?: string; to?: string[] };
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok");
+/* Hanya untuk tombol "Send test notification" yang dipanggil dari browser. */
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const reply = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
-  const secret = Deno.env.get("PUSH_CRON_SECRET");
-  if (secret && req.headers.get("x-cron-secret") !== secret) {
-    return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
-  }
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const pub = Deno.env.get("VAPID_PUBLIC_KEY");
   const priv = Deno.env.get("VAPID_PRIVATE_KEY");
   if (!pub || !priv) {
-    return new Response(JSON.stringify({ error: "VAPID keys belum di-set" }), { status: 500 });
+    return reply({ error: "VAPID keys belum di-set" }, 500);
   }
   webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") || "mailto:forestylab@gmail.com", pub, priv);
 
-  const now = Date.now();
-
   /* Trigger database mengirim {event, id, op} untuk pemberitahuan seketika.
-     Cron mengirim body kosong, dan itu menjalankan jalur pengingat H-x. */
+     Cron mengirim body kosong, dan itu menjalankan jalur pengingat H-x.
+     Tombol uji di aplikasi mengirim {event: "test"} dengan sesi penggunanya. */
   let evt: { event?: string; id?: string; op?: string } = {};
   try { evt = await req.json(); } catch (_) { evt = {}; }
 
+  /* Uji kirim: hanya ke perangkat milik orang yang menekan tombolnya, dan
+     hanya kalau sesinya sah. Tidak butuh secret cron. */
+  if (evt.event === "test") return await sendTest(req);
+
+  /* Selain uji kirim: tanpa secret yang cocok, tolak. Kalau PUSH_CRON_SECRET
+     belum diset, function ini menolak SEMUA panggilan. */
+  const secret = Deno.env.get("PUSH_CRON_SECRET");
+  if (!secret || req.headers.get("x-cron-secret") !== secret) {
+    return reply({ error: "forbidden" }, 403);
+  }
+
+  const now = Date.now();
+
   try {
     /* ---------------- data ---------------- */
-    const [programs, checklist, meetings, tasks, divisions, divMembers, members, profiles, subs, log] = await Promise.all([
+    const [programs, checklist, meetings, tasks, divisions, members, profiles, subs, log] = await Promise.all([
       api("programs?select=id,title,status,starts_at,place"),
       api("checklist?select=id,program_id,text,member_id,due_at,done"),
       api("meetings?select=id,room,title,held_at,place").catch(() => []),
       /* kolom due_at baru ada setelah db/07_task_deadline.sql */
       api("tasks?select=id,division_id,member_id,text,status,due_at&due_at=not.is.null").catch(() => []),
       api("divisions?select=id,name"),
-      api("division_members?select=division_id,member_id"),
       api("members?select=id,name,div,level"),
       api("profiles?select=user_id,member_id,status&status=eq.approved"),
       api("push_subs?select=endpoint,user_id,p256dh,auth"),
@@ -124,7 +139,21 @@ Deno.serve(async (req) => {
           key: `mtg:${mt.id}:live:${now}`,
           title: evt.op === "UPDATE" ? `Meeting rescheduled · ${mt.title}` : `New meeting · ${mt.title}`,
           body: `${fDate(when)} at ${fTime(when)}${mt.place ? `, ${mt.place}` : ""}.`,
-          url: "./#minutes", room: mt.room,
+          url: "./#meeting", room: mt.room,
+        });
+      }
+    } else if (evt.event === "task" && evt.id) {
+      /* Tugas bertenggat dibuat / tenggatnya diubah: langsung ke orang yang
+         ditugaskan (dan akun lab), tanpa menunggu pengingat pukul 07.00. */
+      const t = tasks.find((x: any) => x.id === evt.id);
+      if (t && t.status !== "done" && t.due_at) {
+        const due = new Date(t.due_at);
+        const div: any = divisions.find((d: any) => d.id === t.division_id);
+        jobs.push({
+          key: `task:${t.id}:live:${now}`,
+          title: `${evt.op === "UPDATE" ? "Task updated" : "New task"} · ${div ? div.name : "Division"}`,
+          body: `"${t.text}" is due ${fDate(due)} at ${fTime(due)}.`,
+          url: "./#division", to: [t.member_id],
         });
       }
     } else if (evt.event === "program" && evt.id) {
@@ -175,14 +204,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    /* Tenggat tugas divisi: H-1 dan hari-H pukul 07.00 WIB, ke anggota
-       divisinya. Kunci memuat due_at, jadi kalau tenggatnya dipindah,
-       pengingatnya dikirim lagi untuk tanggal yang baru. */
+    /* Tenggat tugas divisi: H-1 dan hari-H pukul 07.00 WIB, ke orang yang
+       ditugaskan (dan akun lab). Kunci memuat due_at, jadi kalau tenggatnya
+       dipindah, pengingatnya dikirim lagi untuk tanggal yang baru. */
     for (const t of tasks) {
       if (t.status === "done" || !t.due_at) continue;
       const due = new Date(t.due_at);
       const div: any = divisions.find((d: any) => d.id === t.division_id);
-      const to = divMembers.filter((x: any) => x.division_id === t.division_id).map((x: any) => x.member_id);
+      const to = [t.member_id];
       const who: any = memberById.get(t.member_id);
       for (const r of [{ d: 1, l: "H-1" }, { d: 0, l: "H-0" }]) {
         const key = `task:${t.id}:${t.due_at}:${r.l}`;
@@ -191,7 +220,7 @@ Deno.serve(async (req) => {
         if (fire > now || now - fire > MAX_AGE || fire >= due.getTime()) continue;
         jobs.push({
           key, title: `Task due ${r.d ? "tomorrow" : "today"} · ${div ? div.name : "Division"}`,
-          body: `"${t.text}" is due ${fDate(due)} at ${fTime(due)}. Assigned to ${who ? who.name : "-"}.`,
+          body: `"${t.text}" is due ${fDate(due)} at ${fTime(due)}.${who ? ` Assigned to ${who.name}.` : ""}`,
           url: "./#division", to,
         });
       }
@@ -209,7 +238,7 @@ Deno.serve(async (req) => {
         jobs.push({
           key, title: `${r.l} · ${mt.title}`,
           body: `Meeting ${kata}, ${fDate(when)} at ${fTime(when)}${mt.place ? `, ${mt.place}` : ""}.`,
-          url: "./#minutes", room: mt.room,
+          url: "./#meeting", room: mt.room,
         });
       }
     }
@@ -303,4 +332,37 @@ async function deliver(
     console.error(e);
     return new Response(JSON.stringify({ error: String(e?.message ?? e) }), { status: 500 });
   }
+}
+
+/* ===================================================================
+   Uji kirim: satu notifikasi ke setiap perangkat milik pemanggil.
+   =================================================================== */
+async function sendTest(req: Request) {
+  const jwt = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+  if (!jwt) return reply({ error: "No session." }, 401);
+  const u = await fetch(`${SUPA}/auth/v1/user`, { headers: { Authorization: `Bearer ${jwt}`, apikey: SERVICE } });
+  if (!u.ok) return reply({ error: "Invalid session." }, 401);
+  const user = await u.json();
+
+  const subs = await api(`push_subs?select=endpoint,p256dh,auth&user_id=eq.${encodeURIComponent(user.id)}`);
+  let sent = 0, gone = 0, failed = 0;
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: "Test notification · Foresty", body: "Notifications reach this device.", url: "./#notification", tag: `test:${Date.now()}` }),
+        { TTL: 300 },
+      );
+      sent++;
+    } catch (e: any) {
+      if (e?.statusCode === 404 || e?.statusCode === 410) {
+        gone++;
+        await api(`push_subs?endpoint=eq.${encodeURIComponent(s.endpoint)}`, { method: "DELETE" }).catch(() => {});
+      } else {
+        failed++;
+        console.error("test push gagal", e?.statusCode, e?.body || e?.message);
+      }
+    }
+  }
+  return reply({ devices: subs.length, sent, gone, failed });
 }

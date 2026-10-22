@@ -11,7 +11,7 @@ foresty-lab/
 │   ├── css/                styles.css, opening.css
 │   ├── js/                 app.js, opening.js
 │   └── assets/             logo, ikon aplikasi & notifikasi, audio opening
-├── db/                     SQL Supabase, dijalankan berurutan 01 → 10
+├── db/                     SQL Supabase, dijalankan berurutan 01 → 14
 ├── scripts/                script sekali pakai: token Gmail, kunci VAPID (Node 18+)
 └── supabase/functions/     Edge Function gmail-inbox dan push-send (Deno)
 ```
@@ -59,6 +59,14 @@ Buka **SQL Editor → New query**, tempel isi tiap file, lalu **Run**, berurutan
 9. `db/09_audit_log.sql` — menu **Log** akun lab: semua tambah, ubah, dan hapus data
    beserta siapa pelakunya. Pencatatan dimulai sejak file ini dijalankan.
 10. `db/10_task_description.sql` — deskripsi pada tugas divisi.
+11. `db/11_reject_account.sql` — menolak pendaftaran menghapus akunnya, jadi email itu harus
+    mendaftar ulang.
+12. `db/12_meeting_roles.sql` — notulen bisa diisi semua anggota divisi rapat; menjadwalkan,
+    mengubah jadwal, dan menghapus rapat hanya koordinator.
+13. `db/13_security.sql` — pengerasan keamanan (lihat **Catatan keamanan**). Akun lab harus
+    sudah ada sebelum file ini dijalankan.
+14. `db/14_task_push.sql` — notifikasi HP seketika ke orang yang ditugaskan saat tugas
+    bertenggat dibuat atau tenggatnya diubah.
 
 Nomor file berubah sejak versi sebelumnya (dulu 06, 08, 09, 10, 11). Yang sudah pernah
 dijalankan tidak perlu dijalankan lagi.
@@ -252,6 +260,16 @@ Sebagai gantinya function memeriksa header `x-cron-secret`.
 - **iPhone dan iPad** hanya menerima push kalau aplikasinya dipasang ke Home Screen
   dulu lewat Safari → Share → Add to Home Screen, lalu dibuka dari ikon itu.
 - Cron berjalan tiap 15 menit; `push_log` mencegah satu pengingat terkirim dua kali.
+- Tenggat tugas divisi: notifikasi seketika saat tugas dibuat / tenggatnya diubah, lalu
+  pengingat H-1 dan hari-H pukul 07.00 WIB — dikirim ke orang yang ditugaskan dan akun lab.
+- Tombol **Send Test Notification** di halaman Notification mengirim satu notifikasi ke semua
+  perangkat milik akun itu — cara cepat memastikan HP seseorang sudah terdaftar.
+- Kalau pengingat terjadwal tidak pernah sampai, cek cron-nya di SQL Editor:
+  `select status, return_message, start_time from cron.job_run_details order by start_time desc limit 5;`
+  dan jawaban `push-send`:
+  `select status_code, left(content::text, 200), created from net._http_response order by created desc limit 10;`
+  `403 forbidden` berarti secret di `05_push.sql` / `06_push_instant.sql` tidak sama dengan
+  `PUSH_CRON_SECRET`.
 - Perangkat yang mencabut izin otomatis dihapus dari `push_subs` saat pengiriman gagal.
 
 
@@ -286,13 +304,15 @@ diarahkan ke layar **Lengkapi Pendaftaran**.
 | | Akses penuh | Akses terbatas |
 |---|---|---|
 | Siapa | Akun lab, Coordinator, Vice Coordinator, Secretary, Treasurer, dan 4 koordinator divisi | Staff HR, Media & Partner, Study Group, dan tim riset |
-| Checklist program | Centang semua, tambah item baru, tunjuk PIC | Hanya centang item atas namanya |
-| Tugas divisi | Ubah dan tambah untuk siapa saja | Hanya ubah dan tambah atas namanya |
-| Menyetujui akun | Hanya akun lab | Tidak |
-| Menu Inbox | Hanya akun lab | Tidak muncul |
+| Checklist program | Centang semua, tambah dan hapus item, tunjuk PIC | Hanya centang item atas namanya |
+| Tugas divisi | Tambah, ubah, hapus untuk siapa saja di divisinya | Hanya atas namanya, di divisinya sendiri |
+| Meeting | Jadwalkan, ubah jadwal, hapus, isi notulen | Hanya isi notulen rapat divisinya |
+| Menyetujui akun, mengubah jabatan & divisi | Hanya akun lab | Tidak |
+| Menu Inbox & Log | Hanya akun lab | Tidak muncul |
 
 Kolom `members.level` (`inti` / `staff`) yang menentukan. Kalau ada pergantian jabatan,
-ubah kolom itu — tidak perlu menyentuh kode.
+ubah kolom itu di Table Editor Supabase — tidak perlu menyentuh kode. Hanya akun lab (dan
+dashboard Supabase) yang bisa mengubah `members`, `divisions`, dan `division_members`.
 
 Semua batasan ini ada di RLS, jadi tetap berlaku walaupun seseorang memanggil API Supabase
 langsung tanpa lewat tampilan.
@@ -335,3 +355,13 @@ realtime sudah dinyalakan untuk `checklist`, `tasks`, `programs`, dan `profiles`
   Cara menutupnya ada di komentar `db/02_rls.sql`.
 - Kredensial akun lab dipegang petinggi lab. Siapa pun yang memegangnya bisa menyetujui akun,
   jadi perlakukan seperti kunci ruang lab.
+- **Password tidak pernah disimpan di tabel aplikasi.** Supabase Auth hanya menyimpan hash-nya;
+  tidak ada yang bisa membacanya, termasuk akun lab dan pemilik proyek Supabase.
+- **Akun lab dikenali dari email + penanda `foresty_lab` di `app_metadata`** (dipasang
+  `db/13_security.sql`). `app_metadata` hanya bisa diubah dari server, jadi mendaftar dengan
+  email lab tidak memberi akses admin. Kalau akun lab dibuat ulang, jalankan lagi file itu.
+- **Header keamanan** di `app/vercel.json`: Content-Security-Policy (hanya skrip dari situs ini
+  dan jsDelivr), anti-clickjacking, HSTS, nosniff. Pustaka Supabase dari CDN dikunci dengan
+  `integrity` (SRI); kalau versinya diganti, hash di `app/index.html` harus ikut diganti.
+- Kalau alamat proyek Supabase berubah, ganti juga alamatnya di `connect-src` pada CSP.
+- `push-send` menolak semua panggilan kalau `PUSH_CRON_SECRET` belum di-set.

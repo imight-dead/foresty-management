@@ -26,7 +26,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "./";
+  /* hanya alamat di dalam aplikasi ini; tautan ke situs lain diabaikan */
+  let url = (event.notification.data && event.notification.data.url) || "./";
+  try { if (new URL(url, self.registration.scope).origin !== self.location.origin) url = "./"; } catch (_) { url = "./"; }
 
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

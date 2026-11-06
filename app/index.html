@@ -14,10 +14,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@800&family=Inter:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/styles.css?v=3">
 <link rel="stylesheet" href="css/opening.css">
 </head>
 <body>
+
+<!-- layar muat: tampil sampai gate() selesai, supaya refresh tidak hitam polos -->
+<div id="boot" aria-hidden="true">
+  <img src="assets/logo.png" alt="" width="34" height="48">
+  <div class="boot-bar"></div>
+</div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -83,6 +89,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
         integrity="sha256-hZaWX+kY5lZgChtWjToWj1wNPSKmAIhrtvRKZVXbAec=" crossorigin="anonymous"></script>
 <script src="config.js"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>

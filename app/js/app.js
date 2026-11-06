@@ -2356,6 +2356,8 @@ function wireAuthForms() {
 
 /* ---------------------------------------------------------------- gate */
 function showApp(on) {
+  const boot = $("#boot");
+  if (boot) { boot.classList.add("is-gone"); setTimeout(() => boot.remove(), 300); }
   $("#shell").hidden = !on;
   $("#authRoot").hidden = on;
   if (on) $("#authRoot").innerHTML = "";
@@ -2370,6 +2372,11 @@ async function gate() {
     return paintAuth();
   }
   if (recovering) { showApp(false); authScreen = "reset"; return paintAuth(); }
+
+  /* data dimuat bersamaan dengan cek profil, bukan sesudahnya, supaya
+     refresh lebih cepat. Hasilnya baru dipakai kalau akunnya disetujui. */
+  const dataLoad = loadAll();
+  dataLoad.catch(() => {});
 
   const user = session.user;
   const lab = (user.email || "").toLowerCase() === LAB_EMAIL;
@@ -2404,7 +2411,7 @@ async function gate() {
   }
 
   try {
-    await loadAll();
+    await dataLoad;
   } catch (e) {
     showApp(false);
     authErr = "Could not load data: " + (e.message || e);

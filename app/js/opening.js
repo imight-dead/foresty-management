@@ -25,6 +25,15 @@
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
+  /* Opening hanya untuk yang akan masuk. Kalau supabase-js sudah menyimpan
+     sesi (sb-<ref>-auth-token), refresh langsung ke aplikasi. Setelah keluar,
+     signOut() menghapus sesi lalu memuat ulang, jadi opening tampil lagi. */
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (/^sb-.+-auth-token$/.test(localStorage.key(i))) return;
+    }
+  } catch (_) {}
+
   /* hash [0..1] yang selalu sama untuk sel yang sama, supaya polanya organik tapi stabil */
   const hashCell = (col, row, seed) => {
     const x = Math.sin(col * 12.9898 + row * 78.233 + seed * 43.12) * 43758.5453;

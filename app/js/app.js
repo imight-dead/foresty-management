@@ -589,10 +589,22 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal()
 /* render ulang halaman DAN isi modal yang sedang terbuka, dari data terbaru */
 function rerender() {
   const open = CURRENT;
+  /* posisi scroll halaman dan modal dicatat dulu, supaya setelah menambah
+     tugas / program tampilan tetap di tempat, tidak meloncat ke atas */
+  const pageY = window.scrollY;
+  const scrim = $("#modalRoot .scrim"), modalY = scrim ? scrim.scrollTop : 0;
   render();
   /* form tidak digambar ulang, supaya isian yang sedang diketik tidak hilang */
   const jangan = ["form", "mform", "minute"];   /* ada isian yang sedang diketik */
-  if (open) { CURRENT = open; if (!jangan.includes(open.kind)) openModal(modalHTML(open.kind, open.id)); }
+  if (open) {
+    CURRENT = open;
+    if (!jangan.includes(open.kind)) {
+      openModal(modalHTML(open.kind, open.id));
+      const s = $("#modalRoot .scrim");
+      if (s && scrim) { s.querySelector(".modal").style.animation = "none"; s.scrollTop = modalY; }
+    }
+  }
+  window.scrollTo({ top: pageY });
   tickCountdowns();
 }
 
